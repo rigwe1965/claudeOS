@@ -67,9 +67,6 @@ SKIP_FILES = {
     "seed_faiyke.py",
     "apply_supabase_schema.py",
     "import_memory.py",
-    "generate_agents_pdf.py",
-    "generate_docs.py",
-    "md_to_pdf.py",
     "serve_api.py",
     "build_package.py",          # packaging script itself
 }

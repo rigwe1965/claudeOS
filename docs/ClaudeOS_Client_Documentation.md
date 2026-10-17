@@ -128,7 +128,7 @@ Full run history across all agents. Now includes:
 - Browse all AI-generated outputs: reports, summaries, plans, analyses, code
 - Full-text search across output content
 - Filter by namespace, type, and date
-- Export individual outputs as Markdown or PDF
+- Export individual outputs as Markdown, plain text or JSON
 - Bulk delete: select outputs with checkboxes and delete in one action
 
 ### Tickets
@@ -163,7 +163,7 @@ Four sub-tabs providing full system visibility:
 
 #### Token Cost
 - Total input and output token counts across all runs
-- Estimated USD cost based on current claude-sonnet-4-6 pricing
+- Estimated USD cost at the active model's list price (Sonnet 5.5: $2 per million input tokens, $10 per million output tokens); the page caption shows the model and prices in use. Your admin can override the price with `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK` in `.env`
 - Per-agent breakdown: tokens used, cost, run count, avg cost per run
 
 #### Memory Health
@@ -219,7 +219,7 @@ Your theme preference persists for your current session.
 
 ## Quality Scoring
 
-Every agent run is automatically scored by Claude Haiku (LLM-as-Judge) on 4 dimensions. Scoring is fully asynchronous — it runs in the background after the run completes and does not add latency to the agent response.
+Agent runs are scored by Claude Haiku (LLM-as-Judge) on 4 dimensions — roughly half of all runs are sampled, so not every run shows a score. Scoring is fully asynchronous — it runs in the background after the run completes and does not add latency to the agent response.
 
 | Dimension | Scale | Weight | What it measures |
 |-----------|-------|--------|-----------------|
@@ -462,10 +462,13 @@ Outputs and memory can be synced to Supabase for cloud backup and sharing.
 | Login fails | Check username/password (login is case-insensitive); after 5 failures wait 15 min or ask admin to unlock |
 | "Must change password" shown | Enter current password + new password in the prompt |
 | API returns 401 | Token expired — log out and log back in |
-| Output won't export | Try Markdown export; PDF may need wkhtmltopdf installed |
+| Output won't export | Try Markdown, plain text or JSON export (`GET /outputs/<id>/export?format=markdown\|text\|json`); there is no PDF export |
 | Sync fails | Verify SUPABASE_URL and SUPABASE_SERVICE_KEY in .env; restart after changes |
 | Ticket comments not loading | Click the "💬 Comments" toggle — comments load on demand |
-| Eval scores not appearing | Scores are async — wait ~10s after run completes; check API logs for Haiku errors |
+| Eval scores not appearing | Scores are async and sampled (~50% of runs) — wait ~10s after a run completes and run a few more; check API logs for Haiku errors |
+| Semantic search finds nothing | Keyword search still works. If `logs/api.log` shows `KeyError '_type'` or `ChromaDB warmup FAILED`, ask your admin to run `python scripts/reindex_vectors.py` (see README → Troubleshooting) |
+| Wrong model or cost label | Your admin sets `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` in `.env`; changes apply to the next run with no restart |
+| Dashboard down after `start.ps1` | Start it directly: `.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.port 8501 --server.headless true` |
 | Streaming returns error | Ensure only one Flask process is on port 5000; restart with `.\scripts\start.ps1` |
 | Voice input not working | Run `pip install openai-whisper`; first use downloads ~140MB model automatically |
 | MCP server not found | Run `pip install mcp uvicorn` then `.\scripts\start_mcp.ps1` |
@@ -484,4 +487,4 @@ Outputs and memory can be synced to Supabase for cloud backup and sharing.
 
 Contact your admin (Romanus Igwe) or open an issue in the project repository.
 
-**Stack versions:** Python 3.11+ · Flask 3.0 · Streamlit 1.38 · SQLite FTS5 · ChromaDB · claude-sonnet-4-6 · Claude Haiku (eval) · rank-bm25 · plotly · waitress (WSGI)
+**Stack versions:** Python 3.11+ · Flask 3.1 · Streamlit 1.56 · SQLite FTS5 · ChromaDB · claude-sonnet-5-5 · claude-haiku-5-5 (eval) · rank-bm25 · plotly · waitress (WSGI)

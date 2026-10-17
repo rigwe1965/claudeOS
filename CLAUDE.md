@@ -64,22 +64,25 @@ Layer 14: Commercial (namespace white-labeling, client usage dashboard, email no
 - `mcp/server.py` — MCP Tool Server, exposes 12 agents as MCP tools (port 5100)
 - `scripts/create_admin.py` — first-run admin seed script
 - `scripts/seed_client_schema.py` — pre-populate 14 onboarding fields for a client namespace (skips existing keys)
-- `scripts/build_package.py` — builds `dist/FaiykeOS-v17.2.zip` (158 files, excludes .env/data/logs/__pycache__/dev scripts)
+- `scripts/build_package.py` — builds `dist/FaiykeOS-v17.3.zip` (excludes .env/data/logs/__pycache__/dev scripts)
 - `scripts/start.ps1` — kills ports, starts Flask + Streamlit
 - `scripts/start_mcp.ps1` — starts MCP server on port 5100
 - `scripts/stop.ps1` — stops Flask + Streamlit processes
 - `core/backup.py` — VACUUM INTO backup, 7-backup retention, `data/backups/`; daily APScheduler job at 02:00
-- `docs/FaiykeOS_Handbook_faiyke-ai.pdf` — full client-facing handbook (20 sections, regenerated via gen_handbook_pdf.py)
+- `core/models.py` — single source of truth for model ids, labels and token prices; `.env` re-read live; `estimate_cost()`, `model_label()`, `model_info()`
+- `core/utils.py` — `first_text(response)`: first `text` block of a Messages response (thinking blocks come first on some models)
+- `scripts/reindex_vectors.py` — rebuilds the ChromaDB semantic index from `memory_entries` into `data/chromadb_rebuild/`
+- `memory/db/migrations/024_agent_model_inherit.sql` — agents inherit the default model (`agents.model = ''`)
 - `docs/PRODUCT_README.md` — buyer-facing package README with feature tables and quick start
 - `docs/SETUP_GUIDE_NONTECHNICAL.md` — 10-part setup guide for non-technical buyers
 - `docs/AGENCY_LICENSE.md` — agency/reseller license terms (v17.0)
 - `docs/landing/index.html` — marketing landing page (standalone HTML, no build system)
 - `docs/landing/pricing.html` — pricing page with 3-tier cards, comparison table, Formspree booking form
-- `dist/FaiykeOS-v17.2.zip` — distributable buyer package (gitignored — rebuild with build_package.py)
+- `dist/FaiykeOS-v17.3.zip` — distributable buyer package (gitignored — rebuild with build_package.py)
 
 ## Stack
 - Python: Flask (API), Streamlit (dashboard)
-- AI: anthropic SDK ≥0.40.0. Models come ONLY from `core/models.py` (`default_model()` = claude-sonnet-5-5 for agents, `fast_model()` = claude-haiku-5-5 for eval/consolidation; override via `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` in .env). Never hardcode a model id; agent YAMLs omit `model:`, and legacy ids stored in the DB are upgraded at read time.
+- AI: anthropic SDK ≥0.40.0. Models come ONLY from `core/models.py` (`default_model()` = claude-sonnet-5-5 for agents, `fast_model()` = claude-haiku-5-5 for eval/consolidation; override via `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` in .env). Never hardcode a model id or a token price; agent YAMLs omit `model:`, agents store `model = ''` (inherit the default), and legacy ids are upgraded at read time. Editing `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` in `.env` takes effect on the next run — no restart. See "Models, Eval & Semantic Search Rules".
 - Auth: PyJWT≥2.10.1, bcrypt==4.2.0
 - Memory: SQLite FTS5, ChromaDB, sentence-transformers, rank-bm25
 - Charts: plotly
@@ -187,6 +190,17 @@ Layer 14: Commercial (namespace white-labeling, client usage dashboard, email no
 - Voice input: requires `openai-whisper`. Uses `@st.cache_resource` to load model once per session.
 - A2A cards: `GET /agents/<name>/.well-known/agent.json` — pure JSON generation, no extra deps.
 
+## Models, Eval & Semantic Search Rules
+- **Models live in `core/models.py` only.** `.env` is re-read whenever its mtime changes, so `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` edits apply to the next run with no restart. Precedence: `.env` file > process env > Settings > built-in default.
+- **Agents inherit the default model.** `registry.upsert` stores `model = ''` when the agent's model equals `default_model()` (migration 024 blanked the existing rows); `resolve_model('')` returns the live default, so a model bump needs no DB edit. A non-default pinned model is respected as-is.
+- **Prices are in `core/models.py` too** (`PRICING`, `price_per_mtok()`, `estimate_cost()`): Sonnet 5.5 $2 in / $10 out, Haiku 5.5 $0.10 / $0.50 per million tokens. Override for the default model with `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK`. Never hardcode prices or "Sonnet x.y" labels in UI/API code — use `model_label()`; `tests/test_models.py` fails if they come back. `GET /system/models` returns the models and prices in force; `GET /system/namespace-stats` includes `model_label`.
+- **Never read `response.content[0].text`.** Models with thinking on put a `thinking` block first and it has no `.text`. Use `core.utils.first_text(response)`. The judge (`agents/evaluator.py`) and consolidator use `max_tokens=1024` because thinking tokens count against the limit. Eval is sampled at 50%, so not every run has a score.
+- **Activity log**: `executor._write_activity_log` writes category `context` (valid categories are `fact`, `decision`, `context`, `preference`, `reminder`, `insight`) with confidence 0.5 and key `activity_log:<agent>:<YYYYmmddHHMM>`. 0.5 sits below the 0.8–0.85 floors used for injected context, so the trail is searchable but never crowds the client profile out of prompts.
+- **Semantic search**: numpy 1.26 is not safe to first-import from several threads at once (leaves `numpy._typing` half-initialised and silently disables vector search). `memory/vector_store.py` imports numpy at module load and `create_app()` imports it before the warmup threads — do not remove either. The warmup logs `FAILED` when `_init()` fails (it used to log "complete" regardless).
+- **ChromaDB index is derived data** — `memory_entries` in SQLite is the source of truth. `KeyError '_type'` means the index was written by a different chromadb version. Rebuild: `python scripts/reindex_vectors.py` (builds `data/chromadb_rebuild/`), then stop the API, move `data/chromadb` to `data/backups/chromadb-<timestamp>`, rename the rebuild dir to `data/chromadb`, start the API. Rows written straight into SQLite (e.g. seed scripts) are not embedded until reindexed.
+- **Theme persistence**: the chosen theme is mirrored in the URL (`?theme=light|dark`) and restored before `inject()` runs, so a browser refresh keeps it. `session_state["theme"]` alone is lost on refresh.
+- **Known issue**: under Windows PowerShell 5.1, Streamlit's stderr deprecation warning can make `scripts/start.ps1` exit with code 1 and take Streamlit with it. If the dashboard is down after running it, start it directly: `.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.port 8501 --server.headless true`.
+
 ## Performance Patterns
 - Parallel API calls via `ThreadPoolExecutor` — all overview data fetched in one shot (5 concurrent)
 - N+1 → parallel: namespace workspace + projects fetched concurrently in Client Vault
@@ -287,7 +301,7 @@ python scripts/seed_client_schema.py --namespace <client-slug>   # optional: pre
 - **ChromaDB health**: /system/status now uses real `client.heartbeat()` instead of hardcoded "ok"
 - **Webhook hardening**: 64KB body limit + context dict validation
 - **Role enforcement**: projects namespace endpoints require admin/operator; memory consolidate requires admin/operator
-- **Test suite**: 115 tests passing across test_auth, test_admin, test_tickets, test_sync, test_workflows, test_agents, test_memory, test_phase1 + shared conftest.py with `fresh_db`, `app`, `client`, `admin_token` fixtures; legacy test files now have auth fixtures + scheduler mock (commit 3c25eec)
+- **Test suite**: 234 tests passing across 19 test files (test_auth, test_admin, test_tickets, test_sync, test_workflows, test_agents, test_memory, test_phase1, test_models, test_eval_activity, …) + shared conftest.py with `fresh_db`, `app`, `client`, `admin_token` fixtures; legacy test files now have auth fixtures + scheduler mock (commit 3c25eec)
 - Phase 1:  Core Infrastructure ✅
 - Phase 2:  Memory Engine ✅
 - Phase 3:  Agent Registry + Control Center ✅
@@ -336,19 +350,24 @@ python scripts/seed_client_schema.py --namespace <client-slug>   # optional: pre
   - Performance: agents page uses api_get_cached; context builder has 4s timeout fallback
   - Sync log delete: DELETE /sync/log/<id> (single entry) + DELETE /sync/log with {"ids":[...]} (bulk, max 200); Settings renders log via st.data_editor with checkbox column + "Delete Selected (N)" button + per-row 🗑 button
 - Phase 15: Commercial Package ✅
-  - Product rebranded as **FaiykeOS** (commercial name) — all handbook references updated; internal codebase retains ClaudeOS name
-  - Handbook renamed `docs/FaiykeOS_Handbook_faiyke-ai.pdf` — regenerated via `python scripts/gen_handbook_pdf.py`
+  - Product rebranded as **FaiykeOS** (commercial name); internal codebase retains ClaudeOS name
+  - The generated PDFs (handbook, agents doc, QA plan, client brief) were removed from the repo; the Markdown docs are now the source of truth
   - Sales template: `docs/landing/index.html` (landing page) + `docs/landing/pricing.html` (3-tier pricing + Formspree booking form)
   - Buyer collateral: `docs/PRODUCT_README.md` (package overview + feature tables), `docs/SETUP_GUIDE_NONTECHNICAL.md` (10-part zero-experience setup guide), `docs/AGENCY_LICENSE.md` (agency reseller license, governed by Nigerian law)
   - 3-tier pricing: Developer $197 one-time | Business $997 + $147/mo | Agency $497 + $97/mo or $997 flat unlimited
-  - Distribution script: `scripts/build_package.py` → `dist/FaiykeOS-v17.2.zip` (507 KB, 158 files); excludes .env, data/, logs/, vault/workspaces/, outputs/store/, dev scripts, __pycache__
+  - Distribution script: `scripts/build_package.py` → `dist/FaiykeOS-v17.3.zip`; excludes .env, data/, logs/, vault/workspaces/, outputs/store/, dev scripts, __pycache__
   - dist/ is gitignored — ZIP not committed; rebuild with `python scripts/build_package.py`
 - v17.1 Patch ✅
   - Clickable agent catalog cards: `st.components.v1.html` per card (isolated iframe, native CSS hover, single-color states); JS onclick clicks hidden `st.button` (key `card_chat_{safe}`) to fire Python callback; hidden via `[class*="st-key-card_chat_"]` CSS height:0
   - Agent pre-selection fix: set `st.session_state["chat_agent"] = _pending` BEFORE selectbox instantiation — `index=` param silently ignored when key already exists in session state
   - Tab persistence: nonce-stamped `components.html` on every render forces fresh iframe; JS reads/writes `sessionStorage["claudeos_agents_tab"]`; `aria-selected` guard prevents clicking already-active tab (breaks infinite rerun loop); `_goto_chat=True` → target=0, all other reruns → target=-1 (restore from storage)
-  - Handbook bumped to v17.1: updated Section 6 (clickable cards, file attachment table), Section 16 (image+doc analysis), Section 1 intro, TOC new-features note
 - v17.2 — Performance, Security & Architecture Hardening ✅ (commit b5436df)
   - **Performance**: SELECT-before-UPDATE eliminated in executor; streaming INSERT starts as `running`; ChromaDB probe cached 30s; namespace_stats 7→1 query; bulk memory delete batched; duplicate `_entry_dict` removed; context_builder seen_keys cached in tuple; Overview sleep→st.fragment; duplicate cv1 import removed from render loop; agent list cache key unified
   - **Security**: MCP server bound to 127.0.0.1 (was 0.0.0.0); workflow delete/scheduler/webhook routes require admin/operator; workflow limit params wrapped in try/except (400 on bad int, max 200); bulk delete capped at 200; XSS fix in Admin Branding (html.escape on company name + icon); system/status DB path/platform gated by admin/operator; CSP header (`default-src 'none'; frame-ancestors 'none'`) on all Flask responses; HSTS in production; Settings repr masks credentials; worktree weak secret default removed; audit date params validated (ISO pattern); session TTL 7d→24h; namespace slug enumeration closed
   - **Architecture**: stale run cleanup on startup (`_cleanup_stale_runs()` resets pending/running>1h to failed); memory write endpoint rejects values >64KB (422); SCHEDULER_TIMEZONE default changed Africa/Lagos→Europe/Berlin
+- Unreleased (2026-10-17) — Models, scoring & search hardening ✅ (PR #1)
+  - **Models/cost**: dynamic live `.env` models, agents inherit the default (migration 024), correct Sonnet 5.5 / Haiku 5.5 pricing (costs were overstated 50% at Sonnet 4.6 rates), `GET /system/models`, price overrides
+  - **Scoring**: LLM-as-Judge and consolidator no longer crash on a leading thinking block — runs now get quality scores (`first_text()`); activity log writes a valid category
+  - **Semantic search**: numpy import race fixed, honest warmup logging, `scripts/reindex_vectors.py` to rebuild an incompatible ChromaDB index
+  - **Dashboard**: light-mode Usage page crash fixed; theme survives refresh (`?theme=`)
+  - **Docs**: generated PDFs removed from the repo; Markdown is the source of truth

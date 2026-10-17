@@ -4,6 +4,38 @@ All notable changes to ClaudeOS / FaiykeOS. Follows [Keep a Changelog](https://k
 
 ---
 
+## [Unreleased] — 2026-10-17 — Models, Scoring & Search Hardening
+
+Merged in PR #1 (`919d544`, `aceabec`, `112ffa5`, `4818a5b`).
+
+### Added
+- **Live model selection** (`aceabec`): `core/models.py` re-reads `.env` whenever it changes, so `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` edits apply to the next run with no restart. Adds `model_label()`, `estimate_cost()`, `model_info()` and `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK` overrides.
+- `GET /api/v1/system/models` — the models and prices currently in force. `GET /system/namespace-stats` now includes `model_label`.
+- **Migration 024** (`aceabec`): agents inherit the default model (`agents.model = ''`) instead of pinning a concrete id, so a model bump needs no database edit. Agents pinned to another model are untouched.
+- `scripts/reindex_vectors.py` (`4818a5b`): rebuilds the ChromaDB semantic index from `memory_entries` into `data/chromadb_rebuild/`.
+- `core.utils.first_text()` (`112ffa5`): first `text` block of a Messages response.
+- Tests: `tests/test_eval_activity.py`, extended `tests/test_models.py` (suite is now 234 tests).
+
+### Fixed
+- **Cost estimates were overstated by 50%** (`aceabec`): cost used Sonnet 4.6 prices ($3 / $15 per million tokens) hardcoded in four places. Sonnet 5.5 is $2 / $10 and Haiku 5.5 is $0.10 / $0.50. Hardcoded "Sonnet 4.6" labels on the Usage and Observability pages now follow the active model.
+- **Quality scoring never worked** (`112ffa5`): the LLM-as-Judge and the memory consolidator read `response.content[0].text`, which raises when the model returns a thinking block first, so no run was scored and the Usage page showed `0.0/5`. Both now use `first_text()` with `max_tokens=1024`.
+- **Activity log was never stored** (`112ffa5`): it wrote category `activity_log`, which memory validation rejects. It now writes `context` with confidence 0.5 so it stays searchable without being injected into agent prompts.
+- **Semantic search silently disabled** (`4818a5b`): numpy 1.26 is not safe to first-import from several threads at once; the race left `numpy._typing` half-initialised. numpy is now imported eagerly in `memory/vector_store.py` and before the API warmup threads. The warmup also logs `FAILED` when init fails instead of always logging "complete".
+- **Incompatible ChromaDB index** (`4818a5b`): collections written by a different chromadb version raised `KeyError '_type'`. Rebuild with `scripts/reindex_vectors.py` (see README → Troubleshooting).
+- **Light-mode Usage page crash** (`919d544`): `_text` / `_text_muted` were used as their own fallback and never defined (`UnboundLocalError`).
+- **Theme lost on browser refresh** (`919d544`): the theme is now mirrored in the URL (`?theme=`) and restored before styling is injected.
+
+### Removed
+- The generated PDFs: `ClaudeOS_Agents_Documentation.pdf`, `QA_TEST_PLAN.pdf`, `docs/ClaudeOS_Client_Documentation.pdf` and `docs/FaiykeOS_Client_Brief.pdf`. The Markdown documents are now the source of truth.
+- The PDF generator scripts (`scripts/gen_agents_pdf.py`, `gen_client_brief.py`, `gen_handbook_pdf.py`, `generate_agents_pdf.py`, `generate_docs.py`, `md_to_pdf.py`) and the unused `pdfkit` / `markdown2` dependencies. `build_package.py` no longer lists them in its skip list.
+- Documentation no longer claims PDF export of outputs; the app exports JSON, Markdown and plain text (`GET /outputs/<id>/export?format=json|markdown|text`).
+
+### Known issues
+- Under Windows PowerShell 5.1, `scripts/start.ps1` can exit with code 1 when Streamlit prints a deprecation warning to stderr, which stops the dashboard. Start Streamlit directly (see README → Troubleshooting).
+- Each memory write adds another `memory_vectors` row for the same entry, so duplicate mappings accumulate.
+
+---
+
 ## [v17.3] — 2026-06-22 — Sales Readiness, Delete Audit & UX Hardening
 
 ### Added
