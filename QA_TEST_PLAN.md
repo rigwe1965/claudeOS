@@ -1,5 +1,5 @@
 # ClaudeOS — Manual QA Test Plan
-**Version:** 1.1 | **System:** Flask :5000 + Streamlit :8501
+**Version:** 1.2 | **System:** Flask :5000 + Streamlit :8501
 **How to use:** Work top-to-bottom. Mark each item PASS / FAIL / SKIP. Fix all FAILs before client handover.
 
 ---
@@ -746,8 +746,17 @@ SECTION 14 — COMMERCIAL PACKAGE
   14.1 Build Distribution ZIP  [ ]
   14.2 ZIP Contents Integrity  [ ]
   14.3 Dev Scripts Excluded    [ ]
-  14.4 Handbook PDF Integrity  [ ]
-  14.5 Landing Pages Load      [ ]
+  14.4 Landing Pages Load      [ ]
+
+SECTION 15 — MODELS, SCORING & SEMANTIC SEARCH
+  15.1 Models in force         [ ]
+  15.2 Live model change       [ ]
+  15.3 Agents inherit default  [ ]
+  15.4 Cost label and price    [ ]
+  15.5 Quality scoring         [ ]
+  15.6 Activity log            [ ]
+  15.7 Semantic search         [ ]
+  15.8 Theme survives refresh  [ ]
 ```
 
 ---
@@ -759,8 +768,8 @@ SECTION 14 — COMMERCIAL PACKAGE
 python scripts/build_package.py
 ```
 **Expected output:**
-- `dist/FaiykeOS-v17.0.zip` created (~475 KB, ~153 files)
-- Console shows: `Secret leaks: NONE`, file count, size
+- `dist/FaiykeOS-v17.3.zip` created (version comes from `VERSION` in `scripts/build_package.py`)
+- Console shows: `Package built: …`, size, `Files included`, `Files skipped`
 
 **Fail signals:** Python error, zip not created, size 0 KB
 
@@ -768,18 +777,18 @@ python scripts/build_package.py
 ```powershell
 python -c "
 import zipfile
-z = zipfile.ZipFile('dist/FaiykeOS-v17.0.zip')
+z = zipfile.ZipFile('dist/FaiykeOS-v17.3.zip')
 names = z.namelist()
 bad = [n for n in names if '.env' in n and 'example' not in n]
 print('Secret leaks:', bad if bad else 'NONE')
-print('Has handbook:', any('FaiykeOS_Handbook' in n for n in names))
+print('PDFs included:', [n for n in names if n.lower().endswith('.pdf')] or 'NONE')
 print('Has landing:', any('landing/index.html' in n for n in names))
 print('Has requirements:', any('requirements.txt' in n for n in names))
 "
 ```
 **Expected:**
 - `Secret leaks: NONE` — .env not in ZIP
-- `Has handbook: True`
+- `PDFs included: NONE` — the generated PDFs were removed from the repo (a ZIP built before that still contains them; rebuild it)
 - `Has landing: True`
 - `Has requirements: True`
 
@@ -787,24 +796,62 @@ print('Has requirements:', any('requirements.txt' in n for n in names))
 ```powershell
 python -c "
 import zipfile
-z = zipfile.ZipFile('dist/FaiykeOS-v17.0.zip')
+z = zipfile.ZipFile('dist/FaiykeOS-v17.3.zip')
 dev = [n for n in z.namelist() if any(s in n for s in ['debug_namespaces','delete_faiyke','fix_faiyke','seed_faiyke','build_package'])]
 print('Dev scripts leaked:', dev if dev else 'NONE')
 "
 ```
 **Expected:** `Dev scripts leaked: NONE`
 
-### 14.4 Handbook PDF Integrity
-1. Open `docs/FaiykeOS_Handbook_faiyke-ai.pdf`
-2. **Expected:** Cover page shows **FaiykeOS** (not ClaudeOS)
-3. Footer shows `FaiykeOS v17.0 · faiyke-ai`
-4. No duplicate footer on last page
-
-### 14.5 Landing Pages Load
+### 14.4 Landing Pages Load
 1. Open `docs/landing/index.html` in browser (double-click or `start`)
 2. **Expected:** Hero loads with green gradient, "FaiykeOS" heading visible, no broken CSS
 3. Open `docs/landing/pricing.html`
 4. **Expected:** 3 pricing cards visible ($197 / $997+$147mo / $497+$97mo), comparison table renders
+
+---
+
+## SECTION 15 — MODELS, SCORING & SEMANTIC SEARCH
+
+### 15.1 Models in force
+```powershell
+# Log in first, then (token from /auth/login):
+curl -s -H "Authorization: Bearer <token>" http://127.0.0.1:5000/api/v1/system/models
+```
+**Expected:** `default_model` = `claude-sonnet-5-5`, `fast_model` = `claude-haiku-5-5`, prices `[2.0, 10.0]` and `[0.1, 0.5]` (unless overridden in `.env`)
+
+### 15.2 Live model change (no restart)
+1. In `.env` set `CLAUDE_MODEL=claude-opus-5-5` and save
+2. Call `/system/models` again
+3. **Expected:** `default_model` is now `claude-opus-5-5` without restarting the API. Run any agent; its run record's output shows that model
+4. Clear the value again and confirm it returns to `claude-sonnet-5-5`
+
+### 15.3 Agents inherit the default
+1. `python -c "import sqlite3; print(sqlite3.connect('data/claudeos.db').execute('select model, count(*) from agents group by model').fetchall())"`
+2. **Expected:** `[('', 12)]` (migration 024). The Agents catalog still shows the real model name
+
+### 15.4 Cost label and price
+1. Open **Usage** (client) or **Observability → Token Cost** (admin)
+2. **Expected:** the label names the active model (e.g. "USD · Sonnet 5.5"); no "Sonnet 4.6" text anywhere. Cost = tokens in × $2/M + tokens out × $10/M at default prices
+
+### 15.5 Quality scoring
+1. Run an agent in any namespace (scoring is sampled at ~50%, so run 4–6 times)
+2. Wait ~10 seconds
+3. **Expected:** at least one run shows a quality score in Run History / Overview. `logs/api.log` has no `'ThinkingBlock' object has no attribute 'text'` lines
+
+### 15.6 Activity log
+1. After an agent run, search memory for `activity_log`
+2. **Expected:** an entry with key `activity_log:<agent>:<timestamp>`, category `context`. `logs/api.log` has no `Activity log write failed` lines
+
+### 15.7 Semantic search
+1. `logs/api.log` after startup: **Expected** `ChromaDB warmup complete.` and no `FAILED`, `KeyError '_type'` or `NDArray` lines
+2. Call `GET /api/v1/memory/hybrid-search?q=what+time+zone&namespace=<client-ns>`
+3. **Expected:** relevant entries returned (e.g. `client.timezone`) for every namespace, including older ones
+4. If `_type` errors appear: `python scripts/reindex_vectors.py`, then swap `data/chromadb_rebuild` into `data/chromadb` with the API stopped (see README → Troubleshooting)
+
+### 15.8 Theme survives refresh
+1. Switch to light mode, open **Usage** (as a client), press F5
+2. **Expected:** stays in light mode on the same page; no `UnboundLocalError`; URL contains `theme=light`
 
 ---
 

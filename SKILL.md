@@ -109,8 +109,9 @@ Create the following directory structure in the current working directory:
 │   ├── auth.py
 │   ├── config.py
 │   ├── database.py
+│   ├── models.py               ← model ids, labels, token prices; .env re-read live (single source of truth)
 │   ├── notifications.py        ← email engine: smtplib, fire-and-forget, branded HTML templates
-│   └── utils.py
+│   └── utils.py                ← new_id, utcnow, first_text (first text block of an API response)
 ├── dashboard/
 │   ├── _pages/
 │   │   ├── _admin.py
@@ -155,7 +156,6 @@ Create the following directory structure in the current working directory:
 │   ├── __init__.py
 │   └── manager.py
 ├── docs/
-│   ├── FaiykeOS_Handbook_faiyke-ai.pdf   ← full client handbook (20 sections)
 │   ├── PRODUCT_README.md                 ← buyer-facing package overview
 │   ├── SETUP_GUIDE_NONTECHNICAL.md       ← 10-part setup guide for non-technical buyers
 │   ├── AGENCY_LICENSE.md                 ← agency/reseller license terms
@@ -169,8 +169,8 @@ Create the following directory structure in the current working directory:
 │   ├── seed_client_schema.py   ← pre-populate 14 onboarding fields per namespace
 │   ├── seed_namespaces.py
 │   ├── seed_workflows.py
-│   ├── build_package.py        ← builds dist/FaiykeOS-v17.2.1.zip for distribution
-│   ├── gen_handbook_pdf.py     ← regenerates FaiykeOS_Handbook_faiyke-ai.pdf
+│   ├── build_package.py        ← builds dist/FaiykeOS-v17.3.zip for distribution
+│   ├── reindex_vectors.py      ← rebuilds the ChromaDB semantic index from memory_entries
 │   ├── serve_api.py
 │   ├── start.ps1
 │   ├── stop.ps1
@@ -384,25 +384,30 @@ Thumbs.db
 ### STEP 6 — Create requirements.txt
 
 ```
-# CLIENT_NAME OS Requirements
-
+# ClaudeOS Requirements
 # Core
-flask==3.0.3
-flask-cors==4.0.1
+flask==3.1.3
+flask-cors==6.0.0
 flask-limiter==3.7.0
+limits[SQLAlchemy]>=3.6.0
 
 # AI
-anthropic>=0.40.0
+anthropic>=0.40.0,<1.0.0
 
 # Dashboard
-streamlit==1.38.0
+streamlit==1.56.0
+# pyarrow >= 22 requires NumPy 2; chromadb==0.5.5 needs NumPy 1.x — keep pyarrow below 22
+pyarrow>=7.0,<22
 
 # Memory / Vector
 chromadb==0.5.5
 sentence-transformers==3.1.1
 
-# Hybrid RAG
+# Phase 11.2: Hybrid BM25+Vector RAG
 rank-bm25==0.2.2
+
+# Web Intelligence — real-time web search + news for agents (no API key needed)
+ddgs>=1.0.0
 
 # Scheduler
 apscheduler==3.10.4
@@ -410,31 +415,32 @@ apscheduler==3.10.4
 # Data / Validation
 pydantic==2.8.2
 pydantic-settings==2.4.0
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 
 # WSGI (Windows-compatible)
-waitress==3.0.0
+waitress==3.0.1
 
-# Cloud sync (optional)
+# Cloud sync (Phase 7)
 supabase==2.7.4
-
-# Output export
-markdown2==2.5.0
-pdfkit==1.0.0
 
 # Auth
 PyJWT>=2.10.1,<3.0.0
 bcrypt==4.2.0
 
-# Charts
-plotly>=5.18.0
-
-# Optional: voice input
+# Phase 13.1: Voice input (local Whisper — no API key needed)
+# Install separately if voice input desired:
 # openai-whisper>=20231117
 
-# Optional: MCP tool server
+# Phase 12.2: MCP Tool Server
+# Install separately if MCP server desired:
 # mcp>=1.0.0
 # uvicorn>=0.30.0
+
+# Phase 13.3: Live charts
+plotly>=5.18.0
+
+# System monitoring (Phase health bar)
+psutil>=5.9.0
 
 # Dev / testing
 pytest==8.3.3
@@ -472,7 +478,7 @@ system_prompt: |
   Business context: CLIENT_DESC
 
   [Agent-specific instructions here]
-model: claude-sonnet-4-6
+# model: omit this line — agents inherit CLAUDE_MODEL from .env (core/models.py). Only set it to pin one agent.
 max_tokens: 4096
 temperature: 0.7
 tools: []
@@ -605,7 +611,7 @@ Every deployment built by this skill includes all of the following. Nothing is c
 | 3 | Agent Registry — 12 agents, YAML definitions, enable/disable |
 | 4 | Workflow Engine — 7 pipelines, APScheduler, cron + manual |
 | 5 | Client Vault — namespace isolation, per-client workspaces |
-| 6 | Output Manager — auto-tag, full-text search, Markdown/PDF export |
+| 6 | Output Manager — auto-tag, full-text search, JSON/Markdown/text export |
 | 7 | Supabase Cloud Sync — push-only, watermark, 15-min auto |
 | 8 | Auth & Security — JWT/bcrypt, 5 roles, lockout, audit log |
 | 9 | Ticketing System — SLA tiers P1–P4, staff role, bulk ops |
@@ -638,12 +644,11 @@ Every deployment built by this skill includes all of the following. Nothing is c
 | Feature | Details |
 |---------|---------|
 | Product name | **FaiykeOS** — commercial brand name; internal codebase retains ClaudeOS |
-| Handbook | `docs/FaiykeOS_Handbook_faiyke-ai.pdf` — 20-section client handbook, regenerated via `python scripts/gen_handbook_pdf.py` |
 | Landing page | `docs/landing/index.html` — standalone HTML marketing page; hero, features, personas, pricing preview, FAQ |
 | Pricing page | `docs/landing/pricing.html` — 3-tier cards, comparison table, Formspree booking form; replace `YOUR_FORM_ID` with real Formspree endpoint |
 | Pricing tiers | Developer $197 one-time \| Business $997 + $147/mo \| Agency $497 + $97/mo or $997 flat unlimited |
 | Buyer collateral | `docs/PRODUCT_README.md`, `docs/SETUP_GUIDE_NONTECHNICAL.md`, `docs/AGENCY_LICENSE.md` |
-| Distribution ZIP | `scripts/build_package.py` → `dist/FaiykeOS-v17.2.1.zip` (475 KB, 153 files); excludes .env, data/, logs/, dev scripts |
+| Distribution ZIP | `scripts/build_package.py` → `dist/FaiykeOS-v17.3.zip`; excludes .env, data/, logs/, dev scripts |
 | Replacements needed | Update `hello@faiyke-ai.com` email + Formspree form ID in landing/pricing HTML before distributing |
 
 ### Authentication & Roles
@@ -661,7 +666,7 @@ Every deployment built by this skill includes all of the following. Nothing is c
 - Memory — FTS search, semantic search, hybrid BM25+vector, write/edit/delete, bulk ops
 - Workflows — manage, trigger, schedule, webhook setup
 - Projects — client vault, namespaces, project management, context file upload
-- Outputs — search, view, export (Markdown/PDF), bulk delete (timestamps shown as YYYY-MM-DD HH:MM)
+- Outputs — search, view, export (JSON/Markdown/text), bulk delete (timestamps shown as YYYY-MM-DD HH:MM)
 - Tickets — create, assign, comment (lazy-loaded), SLA tracking, bulk ops (email notification on assign/complete)
 - Observability — 5 tabs: Quality Scores, Latency (p50/p95/p99), Token Cost, Memory Health, Namespace Usage (admin/operator only)
 - Settings — env config, sync controls (Supabase), email notification config + test send; Sync Log with per-row 🗑 delete and bulk-select delete (st.data_editor checkboxes + "Delete Selected (N)" button)
@@ -701,7 +706,7 @@ Every deployment built by this skill includes all of the following. Nothing is c
 | `DELETE /sync/log/<id>` | Delete single sync log entry |
 | `DELETE /sync/log` | Bulk delete sync log entries — body: `{"ids": [...]}`, max 200 |
 
-### Migrations (020 total)
+### Migrations (024 total)
 | Migration | Content |
 |-----------|---------|
 | 001 | Initial schema (memory, agents, workflows, outputs) |
@@ -720,6 +725,9 @@ Every deployment built by this skill includes all of the following. Nothing is c
 | 018 | onboarding_done column on users table (first-login tour persists across logout/re-login) |
 | 019 | 15 high-traffic DB indexes (performance) |
 | 020 | Soft-delete: deleted_at column on agent_runs + outputs; hard-delete replaced with soft-delete everywhere |
+| 021–022 | More performance indexes |
+| 023 | Token revocation |
+| 024 | Agents inherit the default model (`agents.model = ''`) so a model bump needs no DB edit |
 
 ---
 
@@ -747,7 +755,7 @@ After the system is running, offer these optional additions:
 3. **Seed initial memory** — "Shall I pre-populate memory with facts about [CLIENT_NAME]?"
 4. **MCP server** — "Would you like the MCP Tool Server started? (lets Claude Desktop call your agents)"
 5. **Supabase cloud sync** — "Do you have Supabase credentials for cloud backup?"
-6. **Commercial package** — "Would you like me to generate the buyer-facing handbook PDF and distribution ZIP for this deployment?" → run `python scripts/gen_handbook_pdf.py` then `python scripts/build_package.py`
+6. **Commercial package** — "Would you like me to build the distribution ZIP for this deployment?" → run `python scripts/build_package.py`
 
 ---
 
@@ -759,7 +767,11 @@ After the system is running, offer these optional additions:
 | Migrations fail | Run `python scripts/migrate.py` manually; check data/ directory exists |
 | Agents not found | Run `python scripts/seed_agents.py` |
 | ChromaDB warmup slow (30-60s) | Normal on first start — sentence-transformers model loading |
-| Eval scores not appearing | Async — wait ~10s; check ANTHROPIC_API_KEY in .env |
+| Eval scores not appearing | Async and sampled (~50% of runs) — wait ~10s; check ANTHROPIC_API_KEY in .env. Log line `'ThinkingBlock' object has no attribute 'text'` means code is reading `content[0].text` — use `core.utils.first_text()` |
+| Semantic search returns nothing / `KeyError '_type'` | ChromaDB index written by a different chromadb version. Run `python scripts/reindex_vectors.py`, stop the API, move `data/chromadb` to `data/backups/`, rename `data/chromadb_rebuild` to `data/chromadb`, start the API |
+| `ChromaDB warmup FAILED` in api.log | Semantic search is off (memory falls back to keyword search). Read the warning above it; do not remove the eager `import numpy` in `memory/vector_store.py` / `create_app()` |
+| Agents on the wrong model / wrong cost label | Set `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` in `.env` (applies live). Cost uses `core/models.py` prices; override with `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK`. Check `GET /api/v1/system/models` |
+| Dashboard down after `start.ps1` | PowerShell 5.1 treats Streamlit's stderr warning as an error and exits. Start it directly: `.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.port 8501 --server.headless true` |
 | Streaming returns 500 | Flask is running but Connection hop-by-hop header rejected by waitress. Fix: `stream_agent` route must use `direct_passthrough=True` on the `Response` object and yield `bytes` (not strings) from the generator — this bypasses Werkzeug's automatic `Connection` header injection (PEP 3333) |
 | Streaming not working in browser | Ensure only one Flask process on port 5000 (`netstat -ano \| findstr :5000`); kill duplicates and restart |
 | Runs stuck as "running" | Old server crashed mid-stream. Fix: `UPDATE agent_runs SET status='failed', completed_at=NOW() WHERE status='running'` |

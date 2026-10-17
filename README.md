@@ -152,7 +152,7 @@ After every agent run completes, an async background task dispatches the prompt+
 - Conciseness (weight 20%) — appropriate length, no padding?
 - Safety (pass/fail, weight 10%) — no harmful content?
 
-Overall score = weighted average. Scores are stored in `agent_runs.eval_score` and appear in Run History and Overview within ~10 seconds of run completion.
+Overall score = weighted average. Scores are stored in `agent_runs.eval_score` and appear in Run History and Overview within ~10 seconds of run completion. Roughly half of runs are sampled for scoring, so not every run has a score. The judge uses the model set in `CLAUDE_FAST_MODEL`.
 
 **Observability Dashboard** (admin/operator)
 Four sub-tabs: Quality Scores (per-agent averages, distribution chart, dimension breakdown, low-quality alerts), Latency (p50/p95/p99 across all runs, per-agent avg), Token Cost (input/output totals, estimated USD, per-agent), Memory Health (entry counts by namespace, consolidation trigger).
@@ -267,7 +267,7 @@ Note: first voice transcription downloads ~140 MB Whisper model automatically.
 
 | | |
 |--|--|
-| **AI** | Anthropic SDK · claude-sonnet-4-6 · Claude Haiku (eval) |
+| **AI** | Anthropic SDK · claude-sonnet-5-5 (agents) · claude-haiku-5-5 (eval, consolidation) — set in `core/models.py` |
 | **Backend** | Flask · waitress (Windows WSGI) |
 | **Dashboard** | Streamlit |
 | **Memory** | SQLite FTS5 · ChromaDB · sentence-transformers · rank-bm25 |
@@ -277,6 +277,29 @@ Note: first voice transcription downloads ~140 MB Whisper model automatically.
 | **MCP** | mcp · uvicorn (optional) |
 | **Voice** | openai-whisper (optional) |
 | **Testing** | pytest |
+
+## Models & Cost
+
+Models are chosen in one place, `core/models.py`, and every agent run, eval and consolidation job follows it.
+
+| `.env` setting | Effect | Default |
+|--|--|--|
+| `CLAUDE_MODEL` | Agents, chat, streaming | `claude-sonnet-5-5` |
+| `CLAUDE_FAST_MODEL` | Quality judge, memory consolidation | `claude-haiku-5-5` |
+| `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK` | USD per million tokens shown in cost estimates | built-in list price (Sonnet 5.5: $2 / $10) |
+
+- Edits to `.env` apply to the next run — no restart needed.
+- Agents inherit the default model; only an agent deliberately pinned to another model keeps it.
+- `GET /api/v1/system/models` shows the models and prices currently in force. Cost figures on the Usage and Observability pages are estimates at that price.
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|--|--|
+| Semantic search returns nothing, log shows `KeyError '_type'` | The ChromaDB index was written by a different chromadb version. Rebuild it from SQLite: `python scripts/reindex_vectors.py`, then stop the API, move `data/chromadb` to `data/backups/`, rename `data/chromadb_rebuild` to `data/chromadb`, and start the API. |
+| `ChromaDB warmup FAILED` in `logs/api.log` | Semantic search is off and memory falls back to keyword search. Check the warning above it; the index rebuild above fixes the `_type` case. |
+| Dashboard is down after `scripts/start.ps1` | On Windows PowerShell 5.1 a Streamlit warning on stderr can make the script exit and stop Streamlit. Start it directly: `.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.port 8501 --server.headless true` |
+| Usage page shows Avg Quality `0.0/5` | No scored runs yet (scoring is sampled and async). Run a few agents and wait ~10 seconds. |
 
 ## Brand
 

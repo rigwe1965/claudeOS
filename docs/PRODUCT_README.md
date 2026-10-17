@@ -43,17 +43,16 @@ FaiykeOS/
 │   └── scheduler.py          ← APScheduler cron jobs
 ├── mcp/server.py             ← MCP Tool Server (port 5100, optional)
 ├── scripts/
-│   ├── migrate.py            ← Runs all 20 DB migrations
+│   ├── migrate.py            ← Runs all 24 DB migrations
 │   ├── seed_agents.py        ← Loads agents from YAML
 │   ├── seed_workflows.py     ← Loads workflows from YAML
 │   ├── seed_namespaces.py    ← Creates default namespaces
 │   ├── seed_client_schema.py ← Pre-populates 14 onboarding fields
 │   ├── create_admin.py       ← Creates the first admin account
-│   ├── gen_handbook_pdf.py   ← Regenerates the client handbook PDF
+│   ├── reindex_vectors.py    ← Rebuilds the semantic-search index if it ever breaks
 │   └── start.ps1             ← Starts Flask + Streamlit (Windows)
-├── tests/                    ← 115 pytest tests
+├── tests/                    ← 234 pytest tests
 ├── docs/
-│   ├── FaiykeOS_Handbook_faiyke-ai.pdf   ← Full client handbook
 │   ├── SETUP_GUIDE_NONTECHNICAL.md       ← For non-technical buyers
 │   ├── AGENCY_LICENSE.md                 ← Agency/reseller terms
 │   └── landing/                          ← Marketing landing pages
@@ -88,7 +87,7 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 # Edit .env — add ANTHROPIC_API_KEY and CLAUDEOS_SECRET_KEY (≥32 chars)
 
-# 3. Initialise database (runs all 20 migrations)
+# 3. Initialise database (runs all 24 migrations)
 python scripts/migrate.py
 
 # 4. Seed default data
@@ -104,6 +103,16 @@ python scripts/create_admin.py --username admin --password YourPass123!
 Open `http://localhost:8501` — login with your admin credentials.
 
 ---
+
+## What's New (latest)
+
+| Change | Detail |
+|--------|--------|
+| Choose your model in `.env` | `CLAUDE_MODEL` (agents) and `CLAUDE_FAST_MODEL` (quality scoring, memory clean-up) apply to the next run — no restart. Defaults: Sonnet 5.5 and Haiku 5.5 |
+| Accurate cost estimates | Costs now use the active model's real price (Sonnet 5.5: $2 in / $10 out per million tokens) — previous versions overstated cost by 50%. Override with `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK` |
+| Quality scores work | The quality judge no longer fails on newer models, so the Usage and Observability quality figures fill in (about half of runs are sampled) |
+| Reliable semantic search | Fixed a start-up race that could silently turn semantic search off, plus a one-command rebuild (`python scripts/reindex_vectors.py`) if the search index is ever damaged |
+| Light mode fixes | The Usage page no longer errors in light mode, and your theme choice survives a browser refresh |
 
 ## What's New in v17.3
 
@@ -170,7 +179,7 @@ Open `http://localhost:8501` — login with your admin credentials.
 - **Memory** — FTS + semantic + hybrid search, write/edit/delete, bulk ops
 - **Workflows** — Manage, trigger, schedule, webhook setup
 - **Projects** — Namespaces, project management, context file upload
-- **Outputs** — Browse, search, export (Markdown/PDF), bulk delete
+- **Outputs** — Browse, search, export (JSON/Markdown/text), bulk delete
 - **Tickets** — Full lifecycle, SLA tiers, comments, email notifications
 - **Observability** — Quality Scores, Latency, Token Cost, Memory Health, Namespace Usage
 - **Settings** — Sync, email config, environment
@@ -201,11 +210,12 @@ display_name: "My Custom Agent"
 system_prompt: |
   You are a specialist agent for [YOUR BUSINESS].
   [Add your instructions here]
-model: claude-sonnet-4-6
 max_tokens: 4096
 temperature: 0.5
 enabled: true
 ```
+
+Leave out `model:` — agents automatically use the model set by `CLAUDE_MODEL` in `.env` (default `claude-sonnet-5-5`), and changing it applies to the next run with no restart. Add a `model:` line only to pin one agent to a different model.
 
 After editing, reseed: `python scripts/seed_agents.py`
 

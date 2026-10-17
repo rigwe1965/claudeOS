@@ -1,6 +1,6 @@
 # ClaudeOS Phase State
 
-## Current Phase: 9 — All Phases Complete ✅
+## Current Phase: All Phases Complete ✅ (Phases 1–15 + hardening; see "Latest Update" at the bottom)
 
 ## Completed Phases
 - Phase 1: Core Infrastructure
@@ -109,3 +109,23 @@ ClaudeOS is fully upgraded to state-of-the-art AI OS.
 - Fix 2: `_overview.py` now builds `_runs_url` with `namespace={user_ns}` for scoped users
 - Fix 3: `effective_namespace()` in `core/auth.py` — fallback to `requested` param if `g.user_namespace` is null
 - Result: client users see only their namespace runs on Overview; admin sees all namespaces
+
+## Latest Update (2026-10-17) — Models, Scoring & Search Hardening (PR #1)
+
+### State of the system
+- 12 agents, 24 migrations, 234 passing tests. Agents run on `claude-sonnet-5-5`; the judge and consolidator on `claude-haiku-5-5`.
+- Models and token prices live only in `core/models.py`. `.env` is re-read on change, so `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` edits apply with no restart. Agents store `model = ''` (inherit the default) — migration 024.
+
+### What was fixed
+- **Costs** were computed at Sonnet 4.6 prices ($3/$15 per M tokens); now the active model's price (Sonnet 5.5 $2/$10). `GET /system/models` shows what's in force.
+- **LLM-as-Judge and consolidator** crashed on a leading `thinking` block (`content[0].text`) so no run was ever scored. Use `core.utils.first_text()`.
+- **Activity log** used an invalid memory category and never stored anything; now `context`, confidence 0.5.
+- **Semantic search**: numpy first-import race (fixed with eager imports in `memory/vector_store.py` and `create_app()`), plus an incompatible ChromaDB index (`KeyError '_type'`) rebuilt with `scripts/reindex_vectors.py` from `memory_entries`.
+- **Dashboard**: light-mode Usage page crash; theme now persists across refresh via `?theme=`.
+- **Docs**: the generated PDFs were deleted; Markdown is the source of truth. README, SKILL, CLAUDE, CHANGELOG, QA plan and the docs/ Markdown files were updated to match.
+
+### Open items
+- `scripts/start.ps1` can exit under PowerShell 5.1 when Streamlit warns on stderr (stops the dashboard).
+- Each memory write adds another `memory_vectors` row for the same entry (duplicate mappings accumulate).
+- `logs/api.log` shows duplicated lines — likely the test suite stacking log handlers into the real log (unconfirmed).
+- `dist/` ZIPs built before the PDFs were deleted (v17.0–v17.2) still contain them; v17.3 was rebuilt without. The PDF generator scripts and the unused `pdfkit` / `markdown2` dependencies were removed.
