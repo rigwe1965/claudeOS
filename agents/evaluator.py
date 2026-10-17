@@ -19,6 +19,7 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 
 from core.models import fast_model
+from core.utils import first_text
 
 logger = logging.getLogger("claudeos.agents.evaluator")
 
@@ -90,11 +91,11 @@ def _do_evaluate(run_id: str, prompt: str, output_text: str, context: str) -> No
 
         response = client.messages.create(
             model=fast_model(),
-            max_tokens=256,
+            max_tokens=1024,  # headroom: thinking tokens count against max_tokens on some models
             messages=[{"role": "user", "content": eval_prompt}],
             timeout=30.0,
         )
-        raw = response.content[0].text.strip() if response.content else "{}"
+        raw = first_text(response).strip() or "{}"
 
         # Strip markdown fences if present
         if raw.startswith("```"):

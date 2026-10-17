@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import streamlit as st
+from core.models import estimate_cost, model_label, price_per_mtok
 from dashboard.components.brand import PRIMARY, get_theme_vars
 
 
@@ -214,8 +215,7 @@ def _render_tokens(runs: list, tv: dict) -> None:
 
     total_in = sum(r.get("tokens_in", 0) for r in done)
     total_out = sum(r.get("tokens_out", 0) for r in done)
-    # Sonnet 4.6 pricing: $3/M input, $15/M output (approx)
-    cost_usd = (total_in / 1_000_000 * 3.0) + (total_out / 1_000_000 * 15.0)
+    cost_usd = estimate_cost(total_in, total_out)
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Input Tokens", f"{total_in:,}")
@@ -233,7 +233,7 @@ def _render_tokens(runs: list, tv: dict) -> None:
 
     rows = []
     for agent, t in sorted(agent_tokens.items(), key=lambda x: -(x[1]["in"] + x[1]["out"])):
-        agent_cost = (t["in"] / 1_000_000 * 3.0) + (t["out"] / 1_000_000 * 15.0)
+        agent_cost = estimate_cost(t["in"], t["out"])
         rows.append({
             "Agent": agent,
             "Input Tokens": f"{t['in']:,}",
@@ -242,7 +242,9 @@ def _render_tokens(runs: list, tv: dict) -> None:
             "Runs": t["runs"],
         })
     st.dataframe(rows, use_container_width=True)
-    st.caption("Pricing based on Claude Sonnet 4.6 rates (~$3/M input, ~$15/M output). Actual costs may vary.")
+    p_in, p_out = price_per_mtok()
+    st.caption(f"Pricing based on Claude {model_label()} rates (${p_in:g}/M input, ${p_out:g}/M output). "
+               "Actual costs may vary.")
 
 
 def _render_memory_health(api_get, api_post, tv: dict, mem_data: dict | None = None) -> None:
@@ -312,7 +314,7 @@ def _render_namespace_usage(runs: list, mem_data: dict | None, tv: dict) -> None
     rows = []
     total_cost = 0.0
     for ns, s in sorted(ns_stats.items(), key=lambda x: -(x[1]["tokens_in"] + x[1]["tokens_out"])):
-        cost = (s["tokens_in"] / 1_000_000 * 3.0) + (s["tokens_out"] / 1_000_000 * 15.0)
+        cost = estimate_cost(s["tokens_in"], s["tokens_out"])
         total_cost += cost
         avg_score = f"{sum(s['scores'])/len(s['scores']):.2f}" if s["scores"] else "—"
         rows.append({
@@ -359,4 +361,6 @@ def _render_namespace_usage(runs: list, mem_data: dict | None, tv: dict) -> None
         except ImportError:
             pass
 
-    st.caption("Token pricing: ~$3/M input, ~$15/M output (Claude Sonnet 4.6). Actual costs may vary.")
+    p_in, p_out = price_per_mtok()
+    st.caption(f"Token pricing: ${p_in:g}/M input, ${p_out:g}/M output (Claude {model_label()}). "
+               "Actual costs may vary.")

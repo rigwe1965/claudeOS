@@ -12,6 +12,7 @@ except ImportError:
     yaml = None
 
 from core.database import get_db
+from core.models import default_model
 from core.utils import new_id, utcnow_str
 from agents.schemas import AgentDefinition
 
@@ -37,6 +38,9 @@ def load_from_yaml(yaml_path: Path) -> Optional[AgentDefinition]:
 def upsert(agent: AgentDefinition) -> AgentDefinition:
     """Insert or update an agent definition in the DB."""
     now = utcnow_str()
+    # Store "" (inherit) unless the agent is pinned to a non-default model, so bumping
+    # CLAUDE_MODEL later never leaves a stale concrete id behind in the DB.
+    stored_model = "" if agent.model == default_model() else agent.model
     with get_db() as conn:
         existing = conn.execute("SELECT id FROM agents WHERE name = ?", (agent.name,)).fetchone()
         if existing:
@@ -48,7 +52,7 @@ def upsert(agent: AgentDefinition) -> AgentDefinition:
                    WHERE name=?""",
                 (
                     agent.display_name, agent.description, agent.category,
-                    agent.system_prompt, agent.model, agent.max_tokens,
+                    agent.system_prompt, stored_model, agent.max_tokens,
                     agent.temperature, json.dumps(agent.tools),
                     agent.namespace_lock, json.dumps(agent.tags),
                     int(agent.enabled), agent.version, now, agent.name,
@@ -63,7 +67,7 @@ def upsert(agent: AgentDefinition) -> AgentDefinition:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     agent.id, agent.name, agent.display_name, agent.description,
-                    agent.category, agent.system_prompt, agent.model,
+                    agent.category, agent.system_prompt, stored_model,
                     agent.max_tokens, agent.temperature, json.dumps(agent.tools),
                     agent.namespace_lock, json.dumps(agent.tags),
                     int(agent.enabled), agent.version, now, now,

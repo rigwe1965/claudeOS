@@ -2201,6 +2201,7 @@ def theme_toggle():
         if "nav_page" in st.session_state:
             st.session_state["_nav_page_bak"] = st.session_state["nav_page"]
         st.session_state.theme = "dark" if current == "light" else "light"
+        st.query_params["theme"] = st.session_state.theme  # survives browser refresh
         st.rerun()
 
     current = get_theme()

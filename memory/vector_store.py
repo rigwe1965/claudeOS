@@ -11,6 +11,12 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+# numpy 1.26 is not safe to import for the first time from several threads at once: a second
+# thread can see numpy._typing half-initialised ("cannot import name 'NDArray' from partially
+# initialized module"), which silently disabled semantic search for the whole process.
+# Importing it here, while this module loads, serialises that first import. Do not remove.
+import numpy  # noqa: F401
+
 from core.config import get_settings
 
 logger = logging.getLogger("claudeos.memory.vector")
