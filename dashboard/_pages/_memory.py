@@ -3,7 +3,7 @@ import requests as _req
 import streamlit as st
 from dashboard.components.brand import get_theme_vars
 
-_API_BASE = "http://localhost:5000/api/v1"
+_API_BASE = "http://127.0.0.1:5000/api/v1"
 
 NAMESPACES: list[str] = []  # populated dynamically from API
 CATEGORIES = ["fact", "decision", "context", "preference", "reminder", "insight"]

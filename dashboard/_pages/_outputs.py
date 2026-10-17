@@ -20,7 +20,7 @@ def _fmt_ts(raw: str) -> str:
     except Exception:
         return raw[:16]
 
-_API_BASE = "http://localhost:5000/api/v1"
+_API_BASE = "http://127.0.0.1:5000/api/v1"
 
 
 def _auth_headers() -> dict:

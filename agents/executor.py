@@ -48,6 +48,9 @@ _bg_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="exec-bg")
 # never queue behind each other and hit the timeout before work even starts.
 _ctx_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="exec-ctx")
 
+# Pool for running a turn's tool calls (searches, page fetches) in parallel.
+_tool_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="exec-tool")
+
 
 def _get_client():
     global _client
@@ -301,6 +304,22 @@ def execute_stream(
             api_messages = _build_messages(prompt, messages, images)
         else:
             _, _response, api_messages = outcome
+            # The tool pass already ended its turn with a finished answer —
+            # emit it directly instead of paying for a second full generation.
+            _final_text = "".join(
+                b.text for b in getattr(_response, "content", [])
+                if getattr(b, "type", None) == "text"
+            ).strip()
+            if getattr(_response, "stop_reason", None) == "end_turn" and _final_text:
+                yield "\n\n"
+                yield _final_text
+                _u = getattr(_response, "usage", None)
+                yield {
+                    "_done": True,
+                    "tokens_in": getattr(_u, "input_tokens", 0),
+                    "tokens_out": getattr(_u, "output_tokens", 0),
+                }
+                return
             api_messages.append({
                 "role": "user",
                 "content": "Based on everything gathered above, provide your complete, detailed response.",
@@ -616,6 +635,7 @@ def _run_with_tools(
             assistant_content = []
             tool_results = []
 
+            tool_blocks = []
             for block in response.content:
                 btype = getattr(block, "type", None)
                 if btype == "text":
@@ -628,12 +648,26 @@ def _run_with_tools(
                         "input": block.input,
                     })
                     logger.info("Tool call: %s(%s)", block.name, list(block.input.keys()))
-                    result_text = call_tool(block.name, block.input, namespace=namespace)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result_text,
-                    })
+                    tool_blocks.append(block)
+
+            # Independent tool calls from one turn run concurrently (web fetches dominate latency)
+            if len(tool_blocks) > 1:
+                futs = [_tool_pool.submit(call_tool, b.name, b.input, namespace=namespace)
+                        for b in tool_blocks]
+                results = []
+                for f in futs:
+                    try:
+                        results.append(f.result(timeout=60))
+                    except Exception as exc:
+                        results.append(f"Tool error: {exc}")
+            else:
+                results = [call_tool(b.name, b.input, namespace=namespace) for b in tool_blocks]
+            for b, result_text in zip(tool_blocks, results):
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": b.id,
+                    "content": result_text,
+                })
 
             loop_messages.append({"role": "assistant", "content": assistant_content})
             loop_messages.append({"role": "user", "content": tool_results})

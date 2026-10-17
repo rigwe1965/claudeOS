@@ -64,7 +64,7 @@ def agent_card(agent_name: str):
 
     from core.config import get_settings
     settings = get_settings()
-    base_url = f"http://localhost:{settings.FLASK_PORT}/api/v1"
+    base_url = f"http://127.0.0.1:{settings.FLASK_PORT}/api/v1"
 
     card = {
         "name": agent.name,

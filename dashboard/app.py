@@ -25,7 +25,7 @@ inject()
 theme_toggle()  # available on all pages including login
 
 _FLASK_PORT = os.environ.get("FLASK_PORT", "5000")
-API_BASE = f"http://localhost:{_FLASK_PORT}/api/v1"
+API_BASE = f"http://127.0.0.1:{_FLASK_PORT}/api/v1"
 logger = logging.getLogger("claudeos.dashboard")
 
 _SESSION_PARAM = "_s"  # URL query param key for session persistence

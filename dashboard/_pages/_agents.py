@@ -303,7 +303,7 @@ def _render_chat_tab(agents: list, api_get, api_post):
             st.session_state.pop("_voice_prefilled", None)
         _jwt   = st.session_state.get("jwt_token", "")
         _fport = __import__("os").environ.get("FLASK_PORT", "5000")
-        _transcribe_url = f"http://localhost:{_fport}/api/v1/transcribe"
+        _transcribe_url = f"http://127.0.0.1:{_fport}/api/v1/transcribe"
 
         with st.form("chat_compose", clear_on_submit=True):
             user_input = st.text_area(
@@ -433,7 +433,7 @@ def _stream_response(
     if messages:
         params["messages"] = json.dumps(messages)
 
-    url = f"http://localhost:{_FLASK_PORT}/api/v1/agents/{agent_name}/stream"
+    url = f"http://127.0.0.1:{_FLASK_PORT}/api/v1/agents/{agent_name}/stream"
 
     placeholder = st.empty()
     full_text = ""

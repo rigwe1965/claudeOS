@@ -10,7 +10,7 @@ from dashboard.components.brand import aurora_hero, badge
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 _FLASK_PORT = os.environ.get("FLASK_PORT", "5000")
-_API_BASE = f"http://localhost:{_FLASK_PORT}/api/v1"
+_API_BASE = f"http://127.0.0.1:{_FLASK_PORT}/api/v1"
 
 
 def _auth_headers() -> dict:

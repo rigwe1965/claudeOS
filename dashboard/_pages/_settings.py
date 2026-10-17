@@ -134,9 +134,9 @@ def render(api_get, api_post, bulk_delete=None):
 def _sync_api_base() -> str:
     try:
         from core.config import get_settings
-        return f"http://localhost:{get_settings().FLASK_PORT}/api/v1"
+        return f"http://127.0.0.1:{get_settings().FLASK_PORT}/api/v1"
     except Exception:
-        return "http://localhost:5000/api/v1"
+        return "http://127.0.0.1:5000/api/v1"
 
 
 def _sync_headers() -> dict:

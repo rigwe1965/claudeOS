@@ -57,7 +57,7 @@ def _sla_overdue(ticket: dict) -> bool:
 
 
 def _api_base() -> str:
-    return "http://localhost:5000/api/v1"
+    return "http://127.0.0.1:5000/api/v1"
 
 
 def _headers() -> dict:
