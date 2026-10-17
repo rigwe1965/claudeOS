@@ -105,12 +105,13 @@ def _cleanup_stale_runs():
             conn.execute(
                 """UPDATE agent_runs SET status='failed', error='Server restarted — run was interrupted'
                    WHERE status IN ('pending','running')
-                     AND created_at < datetime('now', '-1 hour')"""
+                     AND created_at < strftime('%Y-%m-%dT%H:%M:%S', 'now', '-1 hour')"""
             )
+            # workflow_runs has started_at, not created_at; timestamps are ISO ('T' separator)
             conn.execute(
                 """UPDATE workflow_runs SET status='failed', error='Server restarted — run was interrupted'
                    WHERE status IN ('pending','running')
-                     AND created_at < datetime('now', '-1 hour')"""
+                     AND started_at < strftime('%Y-%m-%dT%H:%M:%S', 'now', '-1 hour')"""
             )
     except Exception as e:
         logging.getLogger("claudeos.api").warning("Stale run cleanup failed: %s", e)
