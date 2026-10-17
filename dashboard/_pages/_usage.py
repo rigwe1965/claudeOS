@@ -46,15 +46,15 @@ def render(api_get, api_post, bulk_delete=None):
         _card_surface = _mix(_brand_color, False, 0.78) if _is_dark else (brand.get("surface_color") or "").strip() or t["SURFACE"]
         _card_border  = _mix(_brand_color, False, 0.52) if _is_dark else (brand.get("border_color") or "").strip() or t["BORDER"]
         _surface2     = _mix(_brand_color, False, 0.72) if _is_dark else (brand.get("surface2_color") or "").strip() or t["SURFACE"]
-        _text         = "#FAF8F7" if _is_dark else (brand.get("text_color") or "").strip() or _text
-        _text_muted   = (brand.get("accent_color") or "#C8A96E").strip() if _is_dark else (brand.get("text_muted_color") or "").strip() or _text_muted
+        _text         = "#FAF8F7" if _is_dark else (brand.get("text_color") or "").strip() or t["TEXT"]
+        _text_muted   = (brand.get("accent_color") or "#C8A96E").strip() if _is_dark else (brand.get("text_muted_color") or "").strip() or t["TEXT_MUTED"]
     else:
         _done_color   = "#5a9e56"
         _card_surface = t["SURFACE"]
         _card_border  = t["BORDER"]
         _surface2     = t.get("SURFACE2", t["SURFACE"])
-        _text         = _text
-        _text_muted   = _text_muted
+        _text         = t["TEXT"]
+        _text_muted   = t["TEXT_MUTED"]
 
     # ── KPI row ──────────────────────────────────────────────────────────────
     tok_in  = data.get("tokens_in", 0)
@@ -68,7 +68,7 @@ def render(api_get, api_post, bulk_delete=None):
         ("AI Runs (30d)",    runs,                          None),
         ("Tokens In",        f"{tok_in:,}",                 None),
         ("Tokens Out",       f"{tok_out:,}",                None),
-        ("Est. Cost",        f"${cost:.3f}",                "USD · Sonnet 4.6"),
+        ("Est. Cost",        f"${cost:.3f}",                f"USD · {data.get('model_label') or 'est.'}"),
         ("Avg Quality",      f"{eval_avg:.1f}/5",           None),
         ("Outputs",          outputs,                       None),
     ]

@@ -21,6 +21,12 @@ st.set_page_config(
 )
 
 from dashboard.components.brand import inject, sidebar_logo, theme_toggle, system_health_bar, clear_health_bar, PRIMARY, get_theme_vars
+
+# Restore the chosen theme after a browser refresh (session_state is reset, URL is not).
+# Must run BEFORE inject() so the first render already uses the right palette.
+if "theme" not in st.session_state and st.query_params.get("theme") in ("light", "dark"):
+    st.session_state["theme"] = st.query_params["theme"]
+
 inject()
 theme_toggle()  # available on all pages including login
 
