@@ -1,373 +1,102 @@
 # CLAUDE.md — ClaudeOS Project Rules
 
-## Project
-ClaudeOS — AI Operating System. Coordination layer unifying all Claude Code skills, agents, and workflows into a single authenticated control center.
-Brand: #407E3C green + white. Target: Windows 10 / PowerShell.
+ClaudeOS (commercial name **FaiykeOS**) — AI operating system: one authenticated control center over Claude agents, memory, workflows and tickets. Brand #407E3C green + white. Target: Windows 10 / PowerShell. Release history: `CHANGELOG.md`.
 
 ## Architecture
 ```
-Browser (Streamlit :8501)
-  └─ Login gate → st.session_state["jwt_token"]
-      └─ api_get/api_post → Authorization: Bearer <token>
-          └─ Flask :5000
-              ├─ require_auth (JWT or X-API-Key fallback)
-              ├─ require_role("admin") → /api/v1/admin/*
-              └─ All routes (memory, agents, outputs, tickets, workflows, etc.)
-
-Layer 0:  Streamlit dashboard (:8501) — login-gated, role-filtered nav, 11 pages
-Layer 1:  Flask REST API (:5000) — JWT + X-API-Key auth on all routes
-Layer 2:  Memory Engine (SQLite FTS5 + ChromaDB + hybrid BM25 retrieval)
-Layer 3:  Agent Registry (12 agents, YAML definitions)
-Layer 4:  Workflow Engine (APScheduler, 7 pipelines, webhook triggers)
-Layer 5:  Client Vault (namespace isolation)
-Layer 6:  Output Manager (auto-tag, FTS, export)
-Layer 7:  Supabase Cloud Sync (push-only, 15-min auto)
-Layer 8:  Auth & Security (JWT, bcrypt, roles, audit log)
-Layer 9:  Ticketing System (SLA tiers, staff role, bulk ops)
-Layer 10: Real-Time Intelligence (SSE streaming, LLM-as-Judge eval, Observability)
-Layer 11: Advanced Memory (hybrid RAG, tiered context, consolidation, contextual prefixing)
-Layer 12: Protocols (MCP Tool Server :5100, A2A Agent Cards, webhook triggers)
-Layer 13: Multimodal (multi-turn chat, image analysis, voice input, live dashboard)
-Layer 14: Commercial (namespace white-labeling, client usage dashboard, email notifications, rate limiting, security headers)
+Streamlit :8501 (login gate → session_state["jwt_token"]; api_get/api_post send Bearer)
+  └─ Flask :5000 (waitress) — require_auth (JWT or X-API-Key), require_role("admin") on /api/v1/admin/*
+       ├─ memory (SQLite FTS5 + ChromaDB, hybrid BM25 RRF, tiered context, consolidation)
+       ├─ agents (12 YAML agents, executor, dispatcher, async LLM-as-Judge eval, SSE)
+       ├─ workflows (APScheduler, webhook triggers) · outputs · vault · tickets · Supabase push sync
+       └─ MCP server :5100 (optional, loopback) · A2A cards
 ```
+Start: `.\scripts\start.ps1` (Flask + Streamlit, uses `.venv`), `.\scripts\start_mcp.ps1` (optional), `.\scripts\stop.ps1`. Port detection: read `.env` FLASK_PORT / STREAMLIT_PORT / MCP_PORT first. First-run setup: see `README.md` / `docs/SETUP_GUIDE_NONTECHNICAL.md`.
 
-## Critical Files
-- `core/api/app.py` — Flask factory, all routes bootstrap here
-- `core/auth.py` — JWT, bcrypt, session management, decorators, audit log
-- `core/api/routes/auth_routes.py` — /api/v1/auth/* (login, register, refresh, logout, me)
-- `core/api/routes/admin_routes.py` — /api/v1/admin/* (users, sessions, API keys, audit, security config)
-- `core/api/routes/tickets.py` — /api/v1/tickets/* (ticketing REST API)
-- `core/api/routes/agents.py` — agents REST + SSE stream + A2A cards
-- `core/api/routes/workflows.py` — workflows REST + webhook trigger endpoints
-- `core/api/routes/memory.py` — memory CRUD + hybrid-search + consolidate endpoints
-- `memory/engine.py` — memory facade, all agents call this
-- `memory/retriever.py` — hybrid BM25+vector RRF retrieval (Phase 11.2)
-- `memory/context_builder.py` — tiered context injection for agent prompts (Phase 11.3)
-- `memory/consolidator.py` — episodic→semantic consolidation engine (Phase 11.1)
-- `agents/executor.py` — Claude API wrapper, streaming, multi-turn, image support, eval trigger
-- `agents/evaluator.py` — LLM-as-Judge async quality scoring (Phase 10.3)
-- `agents/dispatcher.py` — routes requests to executor, namespace lock enforcement
-- `workflows/pipeline.py` — step executor for all 7 workflows
-- `workflows/scheduler.py` — APScheduler: cron workflows + consolidation + sync + reminders
-- `dashboard/app.py` — Streamlit entry point, auth gate, role nav (10 pages)
-- `dashboard/components/login_form.py` — branded login + self-registration form (st.form)
-- `dashboard/components/brand.py` — CSS injection, theme toggle, all visual primitives
-- `dashboard/_pages/_agents.py` — Chat/Catalog/Runs tabs, streaming, image, voice, eval; clickable catalog cards; tab persistence via sessionStorage
-- `dashboard/_pages/_overview.py` — Live feed, auto-refresh, error alerts, eval score pills
-- `dashboard/_pages/_observability.py` — Quality trends, latency, tokens, memory health, namespace usage
-- `dashboard/_pages/_workflows.py` — Workflows + Webhooks tab
-- `dashboard/_pages/_admin.py` — Admin Panel UI (users, API keys, audit, sessions, security, client onboarding)
-- `dashboard/components/onboarding.py` — First-time user onboarding tour (persists to DB via migration 018)
-- `dashboard/_pages/_usage.py` — Client Usage Dashboard: Namespace Pulse Score gauge, KPI grid, activity feed, memory summary (client/viewer only)
-- `core/notifications.py` — Email notification engine: stdlib smtplib, fire-and-forget, branded HTML templates; ticket assignment + completion events
-- `core/api/routes/system.py` — /system/status, /system/stats, /system/namespace-stats (Namespace Pulse Score composite)
-- `mcp/server.py` — MCP Tool Server, exposes 12 agents as MCP tools (port 5100)
-- `scripts/create_admin.py` — first-run admin seed script
-- `scripts/seed_client_schema.py` — pre-populate 14 onboarding fields for a client namespace (skips existing keys)
-- `scripts/build_package.py` — builds `dist/FaiykeOS-v17.3.zip` (excludes .env/data/logs/__pycache__/dev scripts)
-- `scripts/start.ps1` — kills ports, starts Flask + Streamlit
-- `scripts/start_mcp.ps1` — starts MCP server on port 5100
-- `scripts/stop.ps1` — stops Flask + Streamlit processes
-- `core/backup.py` — VACUUM INTO backup, 7-backup retention, `data/backups/`; daily APScheduler job at 02:00
-- `core/models.py` — single source of truth for model ids, labels and token prices; `.env` re-read live; `estimate_cost()`, `model_label()`, `model_info()`
-- `core/utils.py` — `first_text(response)`: first `text` block of a Messages response (thinking blocks come first on some models)
-- `scripts/reindex_vectors.py` — rebuilds the ChromaDB semantic index from `memory_entries` into `data/chromadb_rebuild/`
-- `memory/db/migrations/024_agent_model_inherit.sql` — agents inherit the default model (`agents.model = ''`)
-- `docs/PRODUCT_README.md` — buyer-facing package README with feature tables and quick start
-- `docs/SETUP_GUIDE_NONTECHNICAL.md` — 10-part setup guide for non-technical buyers
-- `docs/AGENCY_LICENSE.md` — agency/reseller license terms (v17.0)
-- `docs/landing/index.html` — marketing landing page (standalone HTML, no build system)
-- `docs/landing/pricing.html` — pricing page with 3-tier cards, comparison table, Formspree booking form
-- `dist/FaiykeOS-v17.3.zip` — distributable buyer package (gitignored — rebuild with build_package.py)
+## Key files (non-obvious ones)
+- `core/api/app.py` — Flask factory; imports `memory/vector_store.py` (numpy) BEFORE warmup threads
+- `core/auth.py` — JWT, bcrypt, decorators, `effective_namespace()`, audit log
+- `core/models.py` — only source of model ids, labels, prices (`default_model()`, `fast_model()`, `estimate_cost()`, `model_label()`)
+- `core/utils.py` — `first_text(response)`
+- `memory/engine.py` facade · `retriever.py` hybrid search · `context_builder.py` tiered context · `consolidator.py`
+- `agents/executor.py` — Claude wrapper, streaming, multi-turn, images, eval trigger · `agents/evaluator.py` judge · `agents/dispatcher.py` namespace lock
+- `workflows/pipeline.py`, `workflows/scheduler.py` — step executor; cron + consolidation + sync + backup jobs
+- `core/api/routes/agents.py` — agents REST, SSE stream, output save on stream
+- `dashboard/app.py` auth gate + role nav · `components/brand.py` CSS/theme · `components/proxy.py` hidden proxy buttons · `_pages/_agents.py` chat/catalog/runs
+- `core/notifications.py` — smtplib, fire-and-forget; `core/backup.py` — daily VACUUM INTO, 7 kept
+- `scripts/`: `build_package.py` (→ gitignored `dist/FaiykeOS-v17.3.zip`), `reindex_vectors.py`, `seed_client_schema.py`, `create_admin.py`
 
-## Stack
-- Python: Flask (API), Streamlit (dashboard)
-- AI: anthropic SDK ≥0.40.0. Models come ONLY from `core/models.py` (`default_model()` = claude-sonnet-5-5 for agents, `fast_model()` = claude-haiku-5-5 for eval/consolidation; override via `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` in .env). Never hardcode a model id or a token price; agent YAMLs omit `model:`, agents store `model = ''` (inherit the default), and legacy ids are upgraded at read time. Editing `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` in `.env` takes effect on the next run — no restart. See "Models, Eval & Semantic Search Rules".
-- Auth: PyJWT≥2.10.1, bcrypt==4.2.0
-- Memory: SQLite FTS5, ChromaDB, sentence-transformers, rank-bm25
-- Charts: plotly
-- Dashboard runtime: **streamlit==1.56.0** + **pyarrow<22** in `.venv` (the code uses 1.5x APIs such as `width='stretch'`; pyarrow>=22 needs NumPy 2 but chromadb==0.5.5 needs NumPy 1.x — keep both pins). `scripts/start.ps1` uses `.venv`, not the global Python.
-- Scheduler: APScheduler BackgroundScheduler
-- WSGI: waitress (not gunicorn — Windows)
-- Optional: openai-whisper (voice), mcp + uvicorn (MCP server)
-- Testing: pytest
+## Hard rules
+- Windows: waitress (never gunicorn); no `&&` in PowerShell (use `;`); always `encoding='utf-8'` on file I/O.
+- Never commit `.env`, vault workspace files, `data/claudeos.db`, or `dist/` ZIPs.
+- Namespace isolation is mandatory — no cross-namespace memory reads. Every agent run logs to `agent_runs`; every output saves to `outputs` table + filesystem.
+- Eval is async and must never block a run; if the evaluator import fails, log a warning and continue.
+- Consolidation archives (`archived=1`), never deletes.
+- Webhook secrets: `secrets.token_hex(32)`, compare with `hmac.compare_digest`.
+- Don't hardcode model ids, prices or "Sonnet x.y" labels (`tests/test_models.py` fails); don't reintroduce Poppins (`tests/test_design_tokens.py`).
 
-## Auth & Security Rules
-- All API routes require auth (`@require_auth`) — JWT Bearer or X-API-Key fallback
-- `/api/v1/health` is the ONLY public endpoint (webhook trigger uses X-Webhook-Secret, not JWT)
-- Roles: admin (all access) | operator (all namespaces, no user mgmt) | client (own namespace only) | viewer (own namespace, read-only) | staff (assigned tickets only)
-- JWT access tokens: 60 min TTL. Refresh tokens: 24 hours (session window), stored as SHA-256 hash
-- Passwords: bcrypt 12 rounds, min 10 chars, upper+lower+digit required
-- Account lockout: 5 failed attempts → 15-min lock (configurable via system_config)
-- `must_change_password` flag: user forced to change on next login
-- Client one-per-namespace enforced in application layer
-- Never expose raw refresh tokens in logs or responses beyond initial issue
-- `effective_namespace()` in auth.py enforces client scoping — never trust client-supplied namespace
-  - Falls back to `requested` param if `g.user_namespace` is null
-- Username lookup uses `LOWER()` match — login is case-insensitive
-- Webhook endpoints use `hmac.compare_digest` to validate X-Webhook-Secret — no JWT needed
+## Auth & security
+- Every route needs `@require_auth` (JWT Bearer or X-API-Key). Public: `/api/v1/health` only; webhook trigger uses X-Webhook-Secret.
+- Roles: admin (all) · operator (all namespaces, no user mgmt) · client (own namespace) · viewer (own namespace, read-only) · staff (assigned tickets only).
+- Access token 60 min; refresh token stored as SHA-256 hash, never logged or returned after issue. Intended session window 24 h — DB default is currently 7 days (audit L-3).
+- Passwords: bcrypt 12 rounds, min 10 chars, upper+lower+digit. 5 failed logins → 15-min lock (system_config). `must_change_password` forces change. Username lookup is `LOWER()`.
+- Client one-per-namespace (app layer). `effective_namespace()` enforces client scoping — never trust a client-supplied namespace (falls back to `requested` if `g.user_namespace` is null).
+- Password-reset tokens (`user_agent='password_reset'`) are excluded from `validate_refresh_token`.
+- Vault paths: `_validate_filename()` + `Path.resolve()` comparison. Soft-delete via `deleted_at` on `agent_runs` and `outputs` (list/search/stats filter it; `include_deleted=True` on `dispatcher.list_runs`).
+- Responses: CORS from `ALLOWED_ORIGINS` (never `*`), X-Content-Type-Options / X-Frame-Options / X-XSS-Protection, CSP `default-src 'none'; frame-ancestors 'none'`, HSTS in production. Rate limits (flask-limiter, SQLite storage): agent /run 30/min, /stream 20/min, workflow /trigger 10/min, /run 20/min.
+- Self-registration returns one generic error for missing vs wrong-type namespaces. Webhooks: 64KB body cap + context dict validation. Memory writes >64KB → 422. Bulk deletes capped at 200. Audit `?since=`/`?until=` validated as ISO. Admin PATCH user fields come from `_ALLOWED_USER_UPDATES` whitelist only.
+- Role gates: workflow delete/scheduler/webhook, projects namespace endpoints, memory consolidate → admin/operator; `/system/status` DB path/platform → admin/operator; last admin can't be deleted.
+- Output delete: SELECT-then-DELETE (no `RETURNING`, SQLite <3.35).
+- Known gaps, not yet fixed — see `audits/security-audit-2026-10-17.md`: Supabase sync leaks `workflows.webhook_secret` (H-2); operators can mint API keys (M-14).
 
-## Database Tables
-**Auth Layer:**
-- `users` — id, username, email, password_hash, role, namespace, is_active, failed_attempts, locked_until, must_change_password
-- `user_sessions` — refresh token hashes, ip, ua, expires_at, revoked
-- `auth_events` — full audit log: login_success/failure, logout, token_refresh, user_created, lockout_triggered, etc.
-- `system_config` — key/value security settings
+## Database
+- Auth: `users` (+`onboarding_done`), `user_sessions`, `auth_events`, `system_config`.
+- Agents: `agent_runs` (+eval_*, `deleted_at`), `agent_conversations`, `agent_conversation_turns`.
+- Memory: `memory_entries` (+context_prefix, is_consolidated, archived, consolidated_from), `memory_fts`, `memory_vectors`.
+- Workflows: `workflows` (+webhook_secret, webhook_enabled), `workflow_runs`.
+- Migrations in `memory/db/migrations/`; run `python scripts/migrate.py`.
 
-**Agent Layer:**
-- `agent_runs` — all run records + eval_score, eval_reasoning, eval_dimensions, eval_at (migration 014)
-- `agent_conversations` — multi-turn conversation sessions (migration 017)
-- `agent_conversation_turns` — individual turns with role, content, tokens (migration 017)
-- `users.onboarding_done` — column added by migration 018; POST /auth/onboarding-done marks it true
+## Models, eval & memory
+- `.env` is re-read on mtime change: `CLAUDE_MODEL` (default `claude-sonnet-5-5`) and `CLAUDE_FAST_MODEL` (`claude-haiku-5-5`, eval/consolidation) apply to the next run, no restart. Precedence: `.env` > process env > Settings > default. Price overrides: `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK`. `GET /system/models` shows what's in force.
+- Agents inherit the default: YAMLs omit `model:`, `registry.upsert` stores `model = ''` when it equals the default, `resolve_model('')` returns the live default; pinned non-default models are respected.
+- Never read `response.content[0].text` (thinking blocks come first) — use `first_text()`. Judge and consolidator use `max_tokens=1024`.
+- Eval: `_bg_pool.submit(_trigger_eval, ...)`, sampled at 50%, score = tc×0.40 + fg×0.30 + cc×0.20 + sf×0.10. Correct scope refusals score task_completion=5.0; factual_grounding=5.0 when no claims made.
+- Activity log: `executor._write_activity_log` uses category `context` (valid: fact, decision, context, preference, reminder, insight), confidence 0.5, key `activity_log:<agent>:<YYYYmmddHHMM>` — below the 0.8–0.85 injection floors on purpose. `mem_context` (≤3000 chars) is stored in `agent_runs.input`. Failures go async to a global `error_log` entry.
+- Context: `context_builder.build_context(namespace, query)` runs in a 4s bg-pool timeout in the executor and falls back to flat FTS context. Namespace summary cached 5 min. Hybrid retrieval runs BM25 + vector in parallel, RRF k=60, falls back to FTS5 without rank-bm25. Consolidation: every 4h, entries >24h old, ≤200 per namespace per run.
+- numpy 1.26 breaks if first-imported from several threads — keep the numpy import in `vector_store.py` and the early import in `create_app()`. Warmup logs `FAILED` on `_init()` failure.
+- ChromaDB is derived data (SQLite is the source of truth). `KeyError '_type'` = index from another chromadb version. Rebuild: `python scripts/reindex_vectors.py` → stop API → move `data/chromadb` to `data/backups/chromadb-<ts>` → rename `data/chromadb_rebuild` to `data/chromadb` → start API. Rows written straight into SQLite aren't embedded until reindexed.
+- Agent guards: analysis/briefing/research/writing agents ask clarifying questions and never fabricate. analysis-agent and client-manager-agent must not use training knowledge for business facts (empty context → MISSING INPUT PROTOCOL); client-manager out-of-scope requests get a one-line redirect.
 
-**Memory Layer:**
-- `memory_entries` — all memory + context_prefix, is_consolidated, archived, consolidated_from (migration 015)
-- `memory_fts` — FTS5 virtual table for keyword search
-- `memory_vectors` — ChromaDB chroma_id mapping
+## Streaming, chat & protocols
+- `execute_stream()` is a generator; Flask wraps it in `stream_with_context`; never buffer. Output save on stream lives in `stream_agent()` (`agents.py`), not `_stream_response()`; attribution comes from the URL-path agent, never selectbox state; save uses `threading.Thread(daemon=True)` because `_bg_pool` (2 workers) can be starved by eval jobs.
+- `_parse_stream_inputs()` returns `(prompt, namespace, context, messages, images, save_output)`; GET `save_output=true`, POST `"save_output": true`.
+- Stream errors go in `st.session_state["_stream_error"]` and are appended to history as an assistant message in `_render_chat_tab` — never `st.error()` inside streaming (vanishes on rerun). Dashboard consumes SSE with `requests.get(..., stream=True)` + `iter_lines()`.
+- Multi-turn history: `st.session_state[f"conv_{agent}_{ns}"]` (list of dicts). `chat_input(accept_file=True)` returns `ChatInputValue` (`.text`, `.files`) or str — normalise; sidebar uploader merged via `_all_files`. Images → base64 content blocks via `_build_messages(images=[{data, media_type}])`; text files → fenced prompt block. Voice: optional `openai-whisper`, `@st.cache_resource`.
+- Webhooks: `POST /workflows/<name>/trigger` (X-Webhook-Secret) is the only non-JWT route besides `/health`. A2A: `GET /agents/<name>/.well-known/agent.json`. MCP server binds 127.0.0.1:5100, 12 agents as tools.
 
-**Workflow Layer:**
-- `workflows` — definitions + webhook_secret, webhook_enabled (migration 016)
-- `workflow_runs` — pipeline execution history
+## Dashboard
+- Order matters: `inject()` and `theme_toggle()` BEFORE the auth gate (they render on the login page); sidebar AFTER it. `inject()` runs every render. Login uses `st.form`.
+- Token: decode locally, refresh via `/auth/refresh` if expiry <5 min; a 401 clears session_state + `st.rerun()`.
+- Nav by role: client/viewer hide Settings, Workflows, Observability, Admin and gain Usage; staff sees Tickets only; Observability is admin/operator only. Onboarding tour only for client/viewer.
+- Namespace white-labeling: brand color/accent/company_name/icon live in namespace metadata; `get_ns_brand()` (session_state, loaded on login for client/viewer) feeds sidebar logo, `aurora_hero()` and `_ns_brand_css()`. Colors must be strict hex (see audit M-16).
+- `GET /system/namespace-stats?namespace=<ns>` backs the Usage page; Pulse Score = quality×40% + ticket_resolve×30% + memory_fresh×20% + workflow_ok×10%.
+- Admin: Users action bar = Unlock (only if locked) | Deactivate/Reactivate | Reset Password | Edit | Delete (`@st.dialog` modals). Escape user-supplied text with `html.escape` before `unsafe_allow_html`.
+- Agents catalog cards: per-card `components.v1.html` iframe whose JS clicks a hidden proxy button (`card:<key>`). Pre-select an agent by setting `st.session_state["chat_agent"]` BEFORE `st.selectbox()` — `index=` is ignored once the key exists. Tab persistence: a nonce-stamped `components.html` each render; JS restores `sessionStorage["claudeos_agents_tab"]`; skip clicking a tab whose `aria-selected === 'true'` (prevents rerun loop); `_goto_chat=True` → target 0, otherwise -1 (restore).
+- Performance: parallel fetches via `ThreadPoolExecutor`; `api_get_cached` (30s; key includes JWT; `/agents/runs` bypasses cache; use `/agents?enabled_only=false` everywhere); Overview refresh via `st.fragment(run_every=8)`; ticket comments lazy-loaded; ticket assignees batch-fetched.
+- Emails: `SMTP_*` env; ticket assignment notifies assignee, completion/closure notifies creator.
 
-## Dashboard Rules
-- `inject()` and `theme_toggle()` MUST be called BEFORE the auth gate — they render on login page
-- Theme toggle: fixed bottom-left, 44px circular icon, implemented via `components.v1.html(height=0)`
-- Sidebar renders AFTER auth gate — only visible to logged-in users
-- Role-based nav: clients/viewers hide Settings, Workflows, Observability, Admin but gain Usage page; staff sees Tickets only (Memory, Workflows, Projects, Settings, Admin, Observability hidden)
-- Auto token refresh: decode locally, if expiry < 5 min → call `/auth/refresh` silently
-- 401 response → clear session_state + `st.rerun()` (returns to login)
-- Login form uses `st.form` — Enter-to-submit
-- Streaming: use `requests.get(..., stream=True)` + `resp.iter_lines()` for SSE consumption
-- Multi-turn chat: conversation stored in `st.session_state[f"conv_{agent}_{ns}"]` list of dicts
-- File attach: `chat_input(accept_file=True)` returns `ChatInputValue` (`.text`, `.files`) or plain str — normalise before use; sidebar uploader merged via `_all_files`
-- Observability page visible to admin + operator only (hidden from client, viewer, staff)
-- Observability has 5 tabs: Quality Scores, Latency, Token Cost, Memory Health, Namespace Usage
-- Admin Panel has 7 tabs: Users, API Keys, Audit Log, Sessions, Security, Client Onboarding, Branding
-- Admin Branding tab: per-namespace color picker, accent color, company name, icon, live preview — stored in namespace metadata
-- Usage page: visible to client/viewer only — KPI grid (runs, tokens, cost, quality, outputs), Namespace Pulse Score (composite 0–100 gauge), recent activity feed, memory summary
-- Namespace white-labeling: sidebar logo shows company_name + icon from namespace metadata; aurora_hero() pill uses namespace brand color; `get_ns_brand()` in brand.py reads from session_state; loaded on login for client/viewer
-- Email notifications: `core/notifications.py` — stdlib smtplib, fire-and-forget pool; ticket assignment notifies assignee, ticket completion/closure notifies creator; config via .env SMTP_* vars
-- Admin unlock: Unlock button only shown when user is actually locked (context-aware UI since commit eba9751)
-- Admin Edit User: `@st.dialog` modal — change role, namespace, email, active status, force-pw flag (commit 528346c)
-- Admin Delete User: `@st.dialog` permanent-delete modal — hard-deletes user + sessions + auth events; guarded against deleting last admin (commit 528346c)
-- Admin Users action bar: 5 columns — Unlock/Status | Deactivate/Reactivate | Reset Password | Edit | Delete
-- `_ALLOWED_USER_UPDATES` in admin_routes.py: whitelist includes `role`, `namespace`, `is_active`, `email`, `must_change_password` — SQL column names never taken from request keys directly
-- Onboarding tour: only shown to `client` and `viewer` roles — `admin`, `operator`, `staff` skip it entirely
-- Agents catalog cards: rendered via `st.components.v1.html` per card (isolated iframe — Streamlit brand CSS cannot reach inside); JS onclick clicks hidden `st.button` (`card_chat_{safe}` key); buttons hidden with `[class*="st-key-card_chat_"]` height:0 CSS
-- Agent pre-select from catalog: set `st.session_state["chat_agent"] = name` BEFORE `st.selectbox()` instantiation — never use `index=` workaround, it is silently ignored when the key already exists
-- Agents tab persistence: nonce-stamped `components.html` on every render (forces fresh iframe so JS always runs); JS reads `sessionStorage["claudeos_agents_tab"]` to restore tab; `aria-selected !== 'true'` guard prevents clicking already-active tab (prevents infinite rerun loop); `_goto_chat=True` → target=0 written to storage; all other reruns pass target=-1 (restore from storage)
+## Theme & design system
+- `st.session_state["theme"]` dark/light, mirrored in `?theme=` and restored before `inject()`. `get_theme_vars()` → `_build_css(t)` styles the whole app. No aurora/animated backgrounds.
+- Theme toggle: `components.v1.html(height=0)` using `window.parent.document` (`st.html` blocks scripts, `st.markdown` strips them). Fixed `bottom:24px; left:220px`, 44px circle.
+- Fonts: Inter (body), Source Serif 4 (h1–h3, hero), JetBrains Mono (meta). Light theme `BG #FBF8F3`; dark keeps deep greens; static top glow. Cards: 10px radius, 1px green outline.
+- WCAG AA (4.5:1 text, 3:1 icons) — `tests/test_contrast.py` enforces tokens, `nav_palette()` and status pills; rerun it after any palette change.
+- Hidden proxy buttons (nav, KPI, cards, palette): use `components/proxy.py` (`proxy_button(label, key=…)`, `PROXY_CSS`, `cosClickProxy(doc, label)`; labels `nav:<page>`, `kpi:<key>`, `card:<key>`) — never select by `st-key-*`.
+- Zero-height iframes, `<style>`-only markdown blocks and the theme-flip button must be out of layout flow in `_build_css`, or each adds ~200px dead space.
+- SVG: toolbar `svg path` rules need `:not([fill="none"])` (MoreVert has a `fill="none"` bounding path); JS guards the same. `stToolbarActionButtonIcon` is a CSS background-image — never `background: transparent`; hide with `display:none` or colour with `filter:`. Streamlit 1.56 toolbar testids: `stAppDeployButton`, `stAppToolbar`, `stToolbarActionButton(Icon|Label)`, `stToolbarItems`.
+- Verify visually (tests can't see CSS): headless puppeteer-core + Edge, log in, navigate with Ctrl+K (a URL reload drops the session).
 
-## Phase 14 — Commercial Upgrade Rules
-- Rate limiting: agent /run 30/min, /stream 20/min, workflow /trigger 10/min, workflow /run 20/min (flask-limiter)
-- CORS: ALLOWED_ORIGINS env var replaces wildcard — never use `*` in production
-- Security response headers on every Flask response: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Content-Security-Policy (`default-src 'none'; frame-ancestors 'none'`), HSTS (production only)
-- Namespace slug enumeration: self-registration returns single generic error for missing vs wrong-type namespaces (no enumeration)
-- Admin audit endpoint: `?since=` and `?until=` validated against ISO datetime pattern (returns 400 on invalid)
-- Namespace Pulse Score: composite 0–100 = quality_score×40% + ticket_resolve×30% + memory_fresh×20% + workflow_ok×10%
-- `GET /system/namespace-stats?namespace=<ns>` returns tokens_in/out, cost_usd, run_count, output_count, eval_avg, pulse_score, recent_runs, ticket_total/closed, memory_count/fresh, workflow_total/ok
-- `_ns_brand_css()` in brand.py: injects namespace color/accent into CSS custom properties when client/viewer is logged in
-- Output delete: uses SELECT-then-DELETE not DELETE...RETURNING (RETURNING requires SQLite 3.35+)
-- Output timestamps: displayed as YYYY-MM-DD HH:MM in expander header, meta row, and search results
-- Activity feed agent names: dispatcher.list_runs JOINs agents table; overview uses agent_name > agent_display_name > agent_id[:12] fallback chain
-- Agent hallucination guard: analysis, briefing, research, writing agents ask clarifying questions and decline to fill data gaps — never fabricate findings, names, timestamps, or system state
-- Agent NO TRAINING KNOWLEDGE rule (2026-05-28): analysis-agent and client-manager-agent have explicit CRITICAL block prohibiting use of training data for business-specific facts (cities, clients, revenue, routes). Empty context → MISSING INPUT PROTOCOL, not a fabricated answer. client-manager-agent out-of-scope requests (e.g. drafting emails) → one-line redirect, no claims.
-- Context builder timeout: executor wraps build_context() in 4s timeout via bg pool — slow ChromaDB never blocks agent response; falls back to fast FTS context
-
-## Phase 10-13 Rules
-- SSE streaming: `execute_stream()` in executor.py is a generator — yields text chunks. Flask wraps with `stream_with_context`. Never buffer the full response.
-- Output save on stream: handled entirely in `stream_agent()` (`core/api/routes/agents.py`) — NOT in `_stream_response()` in `_agents.py`. `agent.name` comes from URL path registry lookup; never use selectbox state for attribution. Save uses `threading.Thread(daemon=True)` — NOT `_bg_pool` — because `_bg_pool` (max_workers=2) can be fully occupied by concurrent eval jobs, blocking the save indefinitely.
-- Stream error persistence: SSE/exception errors stored in `st.session_state["_stream_error"]` in `_stream_response()`, then appended to conversation history as an assistant message in `_render_chat_tab`. Survives `st.rerun()`. Never call `st.error()` inside streaming context — it disappears on the next rerun.
-- `_parse_stream_inputs()` returns 6 values: `(prompt, namespace, context, messages, images, save_output)`. GET param: `save_output=true`; POST body: `"save_output": true`.
-- Eval scoring: always async via `_bg_pool.submit(_trigger_eval, ...)` — never block agent run on eval
-- Eval uses `fast_model()` (cheap+fast). Score = tc×0.40 + fg×0.30 + cc×0.20 + sf×0.10
-- Eval rubric (2026-05-28): correct scope refusals score task_completion=5.0 — agents that decline out-of-scope requests without fabricating anything are not penalised; factual_grounding=5.0 when no claims made (commit 11f51e5)
-- Tiered context: `memory/context_builder.py:build_context(namespace, query)` replaces `get_agent_context()` in executor. Falls back to flat context if context_builder fails.
-- Hybrid retrieval: `memory/retriever.py:hybrid_search()` — BM25 + ChromaDB in ThreadPoolExecutor, merged via RRF (k=60). Falls back to FTS5 if rank-bm25 not installed.
-- Consolidation job: every 4h via APScheduler. Archives originals (archived=1), never hard-deletes.
-- Webhooks: `POST /workflows/<name>/trigger` is the only non-JWT endpoint besides /health. Secured by HMAC comparison of X-Webhook-Secret header.
-- MCP server: runs independently on port 5100. Start via `scripts/start_mcp.ps1`. Optional — not required for core operation.
-- Image support: executor `_build_messages()` accepts `images=[{data: base64, media_type: str}]` — injected as Claude API image content blocks.
-- Voice input: requires `openai-whisper`. Uses `@st.cache_resource` to load model once per session.
-- A2A cards: `GET /agents/<name>/.well-known/agent.json` — pure JSON generation, no extra deps.
-
-## Models, Eval & Semantic Search Rules
-- **Models live in `core/models.py` only.** `.env` is re-read whenever its mtime changes, so `CLAUDE_MODEL` / `CLAUDE_FAST_MODEL` edits apply to the next run with no restart. Precedence: `.env` file > process env > Settings > built-in default.
-- **Agents inherit the default model.** `registry.upsert` stores `model = ''` when the agent's model equals `default_model()` (migration 024 blanked the existing rows); `resolve_model('')` returns the live default, so a model bump needs no DB edit. A non-default pinned model is respected as-is.
-- **Prices are in `core/models.py` too** (`PRICING`, `price_per_mtok()`, `estimate_cost()`): Sonnet 5.5 $2 in / $10 out, Haiku 5.5 $0.10 / $0.50 per million tokens. Override for the default model with `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK`. Never hardcode prices or "Sonnet x.y" labels in UI/API code — use `model_label()`; `tests/test_models.py` fails if they come back. `GET /system/models` returns the models and prices in force; `GET /system/namespace-stats` includes `model_label`.
-- **Never read `response.content[0].text`.** Models with thinking on put a `thinking` block first and it has no `.text`. Use `core.utils.first_text(response)`. The judge (`agents/evaluator.py`) and consolidator use `max_tokens=1024` because thinking tokens count against the limit. Eval is sampled at 50%, so not every run has a score.
-- **Activity log**: `executor._write_activity_log` writes category `context` (valid categories are `fact`, `decision`, `context`, `preference`, `reminder`, `insight`) with confidence 0.5 and key `activity_log:<agent>:<YYYYmmddHHMM>`. 0.5 sits below the 0.8–0.85 floors used for injected context, so the trail is searchable but never crowds the client profile out of prompts.
-- **Semantic search**: numpy 1.26 is not safe to first-import from several threads at once (leaves `numpy._typing` half-initialised and silently disables vector search). `memory/vector_store.py` imports numpy at module load and `create_app()` imports it before the warmup threads — do not remove either. The warmup logs `FAILED` when `_init()` fails (it used to log "complete" regardless).
-- **ChromaDB index is derived data** — `memory_entries` in SQLite is the source of truth. `KeyError '_type'` means the index was written by a different chromadb version. Rebuild: `python scripts/reindex_vectors.py` (builds `data/chromadb_rebuild/`), then stop the API, move `data/chromadb` to `data/backups/chromadb-<timestamp>`, rename the rebuild dir to `data/chromadb`, start the API. Rows written straight into SQLite (e.g. seed scripts) are not embedded until reindexed.
-- **Theme persistence**: the chosen theme is mirrored in the URL (`?theme=light|dark`) and restored before `inject()` runs, so a browser refresh keeps it. `session_state["theme"]` alone is lost on refresh.
-- **Known issue**: under Windows PowerShell 5.1, Streamlit's stderr deprecation warning can make `scripts/start.ps1` exit with code 1 and take Streamlit with it. If the dashboard is down after running it, start it directly: `.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.port 8501 --server.headless true`.
-
-## Performance Patterns
-- Parallel API calls via `ThreadPoolExecutor` — all overview data fetched in one shot (5 concurrent)
-- N+1 → parallel: namespace workspace + projects fetched concurrently in Client Vault
-- Ticket assignees batch-fetched in a single `WHERE id IN (...)` query
-- Ticket comments lazy-loaded: only fetched on "💬 Comments" toggle
-- `_cached_api_get` cache key includes JWT token — prevents cross-user cache pollution
-- `/agents/runs` excluded from `_READ_ONLY_PREFIXES` — always bypasses cache
-- Bulk session revoke: single `UPDATE ... WHERE id IN (...)`
-- `_api_key_last_updated` bounded to 500 entries with TTL eviction
-- Security settings update uses `executemany`
-- TTL config cache in `core/auth.py:_cfg()` — 60s in-process cache
-- Hybrid retrieval: BM25 + vector run in parallel (ThreadPoolExecutor), not sequential
-- Tiered context: namespace summary cached 5 min in-process — not rebuilt per request
-- Eval pool: 2-worker ThreadPoolExecutor, non-blocking — never delays agent response
-- Consolidation: only processes entries older than 24h, capped at 200 per namespace per run
-- Memory consolidation caches BM25 corpus per namespace (rebuilt only on write)
-- `executor.py` stores `mem_context` (capped 3000 chars) in agent_runs.input JSON on completion — fixes truncated activity log
-- Agent failures logged to global `error_log` memory entry async — audit trail without blocking runs
-- Namespace Usage tab: fetches up to 500 runs, stacked bar chart (plotly), cross-namespace token/cost/quality comparison
-- Agents page: uses `api_get_cached` for /namespaces fetch — 30s cache saves 300–800ms per tab render
-- Context builder: wrapped in 4s timeout via bg pool in executor.py — ChromaDB/hybrid-search slowness never blocks agent response
-- ChromaDB probe cached 30s (`core/api/routes/system.py`) — no `PersistentClient` re-init per `/system/status` call
-- `namespace_stats` compound SELECT: 7 sequential round-trips → 1 query (scalar subqueries)
-- Bulk memory delete: batch SELECT for permissions + single `DELETE WHERE id IN (...)` + grouped ChromaDB deletes per namespace
-- Agent run completion: no SELECT before UPDATE — builds JSON from in-scope vars directly
-- Streaming INSERT: `create_run_record(status='running')` skips separate `_update_run_status` call
-- Context builder `_ns_summary_cache`: stores `(result, seen_keys_set, expiry)` — eliminates string re-parse on cache hit
-- Overview live refresh: `st.fragment(run_every=8)` replaces `time.sleep(8)` — session thread never frozen
-- Agent list cache unified: `/agents?enabled_only=false` used by all callers — both Overview and Agents page now share same cache key
-
-## Theme System
-- Dark/light mode: `st.session_state["theme"]` ("dark"/"light")
-- `get_theme_vars()` in brand.py returns CSS vars dict
-- `_build_css(t)` generates full CSS from theme vars — one call, entire app styled
-- `inject()` must be called on every page render
-- Theme toggle: `st.components.v1.html(height=0)` — JS uses `window.parent.document`
-  - `st.html()` is sandboxed (scripts blocked); `st.markdown` strips scripts
-  - Position: `fixed; bottom:24px; left:220px` — clears sidebar text (commit 86bbade)
-- Aurora background removed — no animated gradients, no will-change: transform
-- **SVG fill override rule**: header toolbar `svg path` selectors must use `:not([fill="none"])` — Streamlit's MoreVert icon includes a 24×24 bounding-box path with `fill="none"` that becomes a solid colored square if overridden. JS guard: `if (p.getAttribute('fill') === 'none') return` before setting fill.
-- **`stToolbarActionButtonIcon`** is a styled div with `background: url(...) no-repeat center/contain` (CSS background-image, not SVG). Do NOT set `background: transparent` on it — that destroys the image. Use `display: none` to hide or `filter:` to colorize.
-- Streamlit 1.56 toolbar testids: `stAppDeployButton`, `stAppToolbar`, `stToolbarActionButton`, `stToolbarActionButtonIcon`, `stToolbarActionButtonLabel`, `stToolbarItems`
-
-## Design System (marketplace-style redesign, both themes)
-- Fonts: Inter (body), Source Serif 4 (h1–h3 + hero), JetBrains Mono (meta/labels). Loaded once via `<link>` in `inject()`. Never reintroduce Poppins (`tests/test_design_tokens.py` fails on it).
-- Light theme is warm off-white (`BG #FBF8F3`, white `SURFACE`); dark keeps the deep-forest greens. Both get a static brand-green top glow (`GLOW` token) — no animation.
-- Cards: 10px radius, 1px brand-green outline (~55%), small padding. Hero (`aurora_hero`) is centered serif; Overview adds a search box (`command_palette.search_trigger`) that opens the Ctrl/⌘+K palette.
-- Text colours must keep WCAG AA (4.5:1; icons 3:1) — `tests/test_contrast.py` enforces theme tokens, `nav_palette()` and status pills. Change a palette value → run it.
-- **Hidden proxy buttons** (nav, KPI cards, catalog cards, palette): never select by `st-key-*` classes. Use `dashboard/components/proxy.py` — `proxy_button(label, key=…)` renders the button inside a marked container, `PROXY_CSS` hides it, JS clicks it by label via `cosClickProxy(doc, label)` (labels: `nav:<page>`, `kpi:<key>`, `card:<key>`). Works on Streamlit 1.38 and 1.5x.
-- Zero-height script iframes / `<style>`-only markdown blocks / the hidden theme-flip button are taken out of layout flow in `_build_css` — otherwise each adds a row plus a 16px gap (≈200px dead space at the top of every page).
-- Verify visually, not only with pytest: tests cannot see CSS. Log in with a headless browser (puppeteer-core + Edge) and navigate with Ctrl+K — a URL reload drops the session.
-
-## Rules
-- Never use gunicorn — use waitress on Windows
-- Always `encoding='utf-8'` on file reads/writes
-- Never commit .env, vault workspace files, or data/claudeos.db
-- Never commit dist/ ZIP files — dist/ is gitignored; only commit build_package.py; rebuild ZIP with `python scripts/build_package.py`
-- Namespace isolation is mandatory — no cross-namespace memory reads
-- Every agent run logs to agent_runs table
-- Every output saves to outputs table + file system
-- Port detection: read .env FLASK_PORT/STREAMLIT_PORT/MCP_PORT first
-- Never use `&&` in shell — use `;` or separate calls (PowerShell)
-- Eval is async — never block on it. If evaluator.py import fails, log warning and continue.
-- Consolidation archives, never deletes — `archived=1` not `DELETE`
-- Webhook secrets: always use `secrets.token_hex(32)`, always compare with `hmac.compare_digest`
-
-## Server Start
-```powershell
-.\scripts\start.ps1                 # Flask + Streamlit (required)
-.\scripts\start_mcp.ps1             # MCP server (optional, port 5100)
-```
-
-## First-Run Setup (new install)
-```powershell
-pip install -r requirements.txt
-python scripts/migrate.py
-python scripts/seed_agents.py
-python scripts/seed_workflows.py
-python scripts/seed_namespaces.py
-python scripts/create_admin.py --username admin --password Admin123!
-python scripts/seed_client_schema.py --namespace <client-slug>   # optional: pre-fill 14 onboarding fields
-.\scripts\start.ps1
-```
-
-## Phase Status — ALL COMPLETE (+ Handover Hardening)
-
-### Handover Hardening — Security, Performance & Test Coverage
-- **Auth fix**: validate_refresh_token excludes password_reset tokens (user_agent != 'password_reset')
-- **Vault security**: path traversal prevention via `_validate_filename()` + `Path.resolve()` comparison
-- **Soft-delete**: agent_runs + outputs use `deleted_at` column (migration 020); hard-delete replaced everywhere; list/search/stats filter `deleted_at IS NULL`; `include_deleted=True` param on dispatcher.list_runs
-- **DB backup**: `core/backup.py` — VACUUM INTO, 7-backup retention, `data/backups/`; daily APScheduler job at 02:00; `POST /admin/backup` + `GET /admin/backup` endpoints
-- **DB indexes**: 15 new indexes on high-traffic columns (migration 019)
-- **API key regenerate**: `POST /admin/api-keys/<id>/regenerate`; UI button in Admin → API Keys tab
-- **Audit date filters**: `?since=&until=` on GET /admin/audit
-- **Supabase sync extended**: users, tickets, workflows tables added to sync (sensitive columns excluded)
-- **Rate limiter storage**: SQLite-backed with ImportError fallback to in-memory
-- **Scheduler timezone**: configurable via SCHEDULER_TIMEZONE env var (default: Europe/Berlin)
-- **ChromaDB health**: /system/status now uses real `client.heartbeat()` instead of hardcoded "ok"
-- **Webhook hardening**: 64KB body limit + context dict validation
-- **Role enforcement**: projects namespace endpoints require admin/operator; memory consolidate requires admin/operator
-- **Test suite**: 234 tests passing across 19 test files (test_auth, test_admin, test_tickets, test_sync, test_workflows, test_agents, test_memory, test_phase1, test_models, test_eval_activity, …) + shared conftest.py with `fresh_db`, `app`, `client`, `admin_token` fixtures; legacy test files now have auth fixtures + scheduler mock (commit 3c25eec)
-- Phase 1:  Core Infrastructure ✅
-- Phase 2:  Memory Engine ✅
-- Phase 3:  Agent Registry + Control Center ✅
-- Phase 4:  Workflow Engine ✅
-- Phase 5:  Client/Project Vault ✅
-- Phase 6:  Output Manager ✅
-- Phase 7:  Cloud Deployment (Supabase Sync) ✅
-- Phase 8:  Auth, Admin Backend & Multi-User Login ✅
-- Phase 9:  Ticketing System + Bulk Delete ✅
-- Phase 10: Real-Time Intelligence ✅
-  - SSE streaming: GET /agents/<name>/stream (execute_stream generator)
-  - LLM-as-Judge: async Haiku eval after every run (migration 014)
-  - Observability dashboard: quality, latency p50/p95/p99, token cost, memory health, namespace usage (5 tabs)
-- Phase 11: Advanced Memory & Retrieval ✅
-  - Hybrid BM25+Vector RAG with RRF (memory/retriever.py, rank-bm25)
-  - Tiered context injection (memory/context_builder.py, ~40% token reduction)
-  - Memory consolidation engine (memory/consolidator.py, 4h APScheduler job)
-  - Contextual memory prefixing (context_prefix column, migration 015)
-- Phase 12: Event-Driven Workflows & Protocols ✅
-  - Webhook triggers (POST /workflows/<name>/trigger, X-Webhook-Secret auth, migration 016)
-  - MCP Tool Server (mcp/server.py, port 5100, 12 agents as MCP tools)
-  - A2A Agent Cards (GET /agents/<name>/.well-known/agent.json)
-- Phase 13: Multimodal Input & Live Dashboard ✅
-  - Multi-turn chat UI (conversation history, migration 017)
-  - Image/screenshot analysis (base64 content blocks via executor); multiple images supported
-  - File attachment: `chat_input(accept_file=True, file_type=[...])` — native inline attach for images + .md/.txt; sidebar file_uploader kept as fallback; both merged; text files injected as fenced prompt block, images as base64 content blocks
-  - Voice input (st.audio_input + local Whisper, optional); voice widget resets on Clear Conversation
-  - Live Overview (auto-refresh toggle, eval score pills, error/running alerts)
-  - Onboarding tour (first login only, persists via migration 018 onboarding_done column)
-  - Client Onboarding tab in Admin Panel: 14-field schema seed per namespace
-  - Admin unlock: context-aware button only shown when user is actually locked
-  - Admin Edit User + Delete User: `@st.dialog` modals, 5-column action bar (commit 528346c)
-  - Onboarding tour role-gated: `client` and `viewer` only
-- Phase 14: Commercial Upgrade ✅
-  - Security hardening: CORS ALLOWED_ORIGINS env var, security response headers, rate limiting (flask-limiter)
-  - Namespace white-labeling: per-namespace color/accent/company_name/icon in metadata; sidebar logo; aurora_hero() branded pills
-  - Client Usage Dashboard (_usage.py): Namespace Pulse Score gauge, KPI grid, activity feed, memory summary (client/viewer only)
-  - GET /system/namespace-stats: composite pulse score + all usage metrics per namespace
-  - Email notifications (core/notifications.py): ticket assignment + completion events, branded HTML, fire-and-forget smtplib
-  - Admin Branding tab (7th tab): per-namespace color picker, accent, company name, live preview
-  - Agent hallucination guard: analysis/briefing/research/writing agents ask clarifying questions; never fabricate data
-  - Agent NO TRAINING KNOWLEDGE rule: analysis-agent + client-manager-agent block use of training data for business facts; empty context triggers MISSING INPUT PROTOCOL; client-manager-agent out-of-scope requests get one-line redirect only (commit 87815fb)
-  - Output delete compat: SELECT-then-DELETE replaces RETURNING (supports SQLite < 3.35)
-  - Output timestamps: YYYY-MM-DD HH:MM shown in all output views
-  - Activity feed agent names: dispatcher JOINs agents table; human-readable names always shown
-  - Performance: agents page uses api_get_cached; context builder has 4s timeout fallback
-  - Sync log delete: DELETE /sync/log/<id> (single entry) + DELETE /sync/log with {"ids":[...]} (bulk, max 200); Settings renders log via st.data_editor with checkbox column + "Delete Selected (N)" button + per-row 🗑 button
-- Phase 15: Commercial Package ✅
-  - Product rebranded as **FaiykeOS** (commercial name); internal codebase retains ClaudeOS name
-  - The generated PDFs (handbook, agents doc, QA plan, client brief) were removed from the repo; the Markdown docs are now the source of truth
-  - Sales template: `docs/landing/index.html` (landing page) + `docs/landing/pricing.html` (3-tier pricing + Formspree booking form)
-  - Buyer collateral: `docs/PRODUCT_README.md` (package overview + feature tables), `docs/SETUP_GUIDE_NONTECHNICAL.md` (10-part zero-experience setup guide), `docs/AGENCY_LICENSE.md` (agency reseller license, governed by Nigerian law)
-  - 3-tier pricing: Developer $197 one-time | Business $997 + $147/mo | Agency $497 + $97/mo or $997 flat unlimited
-  - Distribution script: `scripts/build_package.py` → `dist/FaiykeOS-v17.3.zip`; excludes .env, data/, logs/, vault/workspaces/, outputs/store/, dev scripts, __pycache__
-  - dist/ is gitignored — ZIP not committed; rebuild with `python scripts/build_package.py`
-- v17.1 Patch ✅
-  - Clickable agent catalog cards: `st.components.v1.html` per card (isolated iframe, native CSS hover, single-color states); JS onclick clicks hidden `st.button` (key `card_chat_{safe}`) to fire Python callback; hidden via `[class*="st-key-card_chat_"]` CSS height:0
-  - Agent pre-selection fix: set `st.session_state["chat_agent"] = _pending` BEFORE selectbox instantiation — `index=` param silently ignored when key already exists in session state
-  - Tab persistence: nonce-stamped `components.html` on every render forces fresh iframe; JS reads/writes `sessionStorage["claudeos_agents_tab"]`; `aria-selected` guard prevents clicking already-active tab (breaks infinite rerun loop); `_goto_chat=True` → target=0, all other reruns → target=-1 (restore from storage)
-- v17.2 — Performance, Security & Architecture Hardening ✅ (commit b5436df)
-  - **Performance**: SELECT-before-UPDATE eliminated in executor; streaming INSERT starts as `running`; ChromaDB probe cached 30s; namespace_stats 7→1 query; bulk memory delete batched; duplicate `_entry_dict` removed; context_builder seen_keys cached in tuple; Overview sleep→st.fragment; duplicate cv1 import removed from render loop; agent list cache key unified
-  - **Security**: MCP server bound to 127.0.0.1 (was 0.0.0.0); workflow delete/scheduler/webhook routes require admin/operator; workflow limit params wrapped in try/except (400 on bad int, max 200); bulk delete capped at 200; XSS fix in Admin Branding (html.escape on company name + icon); system/status DB path/platform gated by admin/operator; CSP header (`default-src 'none'; frame-ancestors 'none'`) on all Flask responses; HSTS in production; Settings repr masks credentials; worktree weak secret default removed; audit date params validated (ISO pattern); session TTL 7d→24h; namespace slug enumeration closed
-  - **Architecture**: stale run cleanup on startup (`_cleanup_stale_runs()` resets pending/running>1h to failed); memory write endpoint rejects values >64KB (422); SCHEDULER_TIMEZONE default changed Africa/Lagos→Europe/Berlin
-- Unreleased (2026-10-17) — Models, scoring & search hardening ✅ (PR #1)
-  - **Models/cost**: dynamic live `.env` models, agents inherit the default (migration 024), correct Sonnet 5.5 / Haiku 5.5 pricing (costs were overstated 50% at Sonnet 4.6 rates), `GET /system/models`, price overrides
-  - **Scoring**: LLM-as-Judge and consolidator no longer crash on a leading thinking block — runs now get quality scores (`first_text()`); activity log writes a valid category
-  - **Semantic search**: numpy import race fixed, honest warmup logging, `scripts/reindex_vectors.py` to rebuild an incompatible ChromaDB index
-  - **Dashboard**: light-mode Usage page crash fixed; theme survives refresh (`?theme=`)
-  - **Docs**: generated PDFs removed from the repo; Markdown is the source of truth
+## Stack & runtime
+- Flask, Streamlit **1.56.0** + **pyarrow<22** in `.venv` (pyarrow ≥22 needs NumPy 2; chromadb 0.5.5 needs NumPy 1.x — keep both pins; code uses 1.5x APIs like `width='stretch'`). PyJWT ≥2.10.1, bcrypt 4.2.0, anthropic ≥0.40, plotly, APScheduler (timezone `SCHEDULER_TIMEZONE`, default Europe/Berlin), pytest. Optional: openai-whisper, mcp + uvicorn.
+- Known issue: under PowerShell 5.1 Streamlit's stderr deprecation warning can make `start.ps1` exit 1 and kill Streamlit. If the dashboard is down, run `.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.port 8501 --server.headless true`.
+- Tests: `pytest` with shared `conftest.py` fixtures (`fresh_db`, `app`, `client`, `admin_token`; scheduler mocked).
+- Supabase sync is push-only (15-min auto) for users, tickets, workflows and memory tables; sensitive columns excluded via `_EXCLUDE_COLS` in `sync/engine.py`. Sync log delete: `DELETE /sync/log/<id>` or `DELETE /sync/log` with `{"ids":[...]}` (max 200).
