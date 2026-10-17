@@ -1762,9 +1762,11 @@ def _inject_chat_input_js(theme_key: str) -> None:
   setTimeout(injectStyle, 300);
   setTimeout(injectStyle, 800);
 
+  if (window.parent.__cosObsStyle) window.parent.__cosObsStyle.disconnect();
   var obs = new MutationObserver(function() {{
     if (!doc.getElementById(STYLE_ID)) injectStyle();
   }});
+  window.parent.__cosObsStyle = obs;
   if (doc.body) obs.observe(doc.body, {{childList: true, subtree: false}});
 }})();
 </script>""", height=0)
@@ -1954,10 +1956,12 @@ def _inject_brand_colors_js(color: str, accent: str) -> None:
   setTimeout(runAll, 1500);
 
   // MutationObserver — re-apply on any DOM change (navigation, rerenders)
+  if (window.parent.__cosObsRadio) window.parent.__cosObsRadio.disconnect();
   var obs = new MutationObserver(function() {{
     clearTimeout(obs._t);
     obs._t = setTimeout(runAll, 80);
   }});
+  window.parent.__cosObsRadio = obs;
   if (doc.body) obs.observe(doc.body, {{
     childList: true, subtree: true,
     attributes: true, attributeFilter: ['aria-checked']
@@ -2141,10 +2145,12 @@ def _inject_header_fix_js(header_bg: str, text_color: str) -> None:
   setTimeout(runAllFixes, 200);
   setTimeout(runAllFixes, 800);
 
+  if (window.parent.__cosObsHeader) window.parent.__cosObsHeader.disconnect();
   var obs = new MutationObserver(function() {{
     clearTimeout(obs._ht);
     obs._ht = setTimeout(runAllFixes, 80);
   }});
+  window.parent.__cosObsHeader = obs;
   if (doc.body) obs.observe(doc.body, {{ childList: true, subtree: true }});
 }})();
 </script>
@@ -2317,7 +2323,9 @@ def theme_toggle():
   hideTrigger();
   setTimeout(hideTrigger, 150);
   setTimeout(hideTrigger, 600);
+  if (window.parent.__cosObsTrigger) window.parent.__cosObsTrigger.disconnect();
   var obs = new MutationObserver(hideTrigger);
+  window.parent.__cosObsTrigger = obs;
   obs.observe(doc.body, {{childList: true, subtree: true}});
   // keep observer alive for lifetime of page — Streamlit re-renders repeatedly
   // restore the trigger button visibility; we must always re-hide it
@@ -2528,7 +2536,9 @@ def system_health_bar(api_base: str, token: str) -> None:
   applyOffset();
   setTimeout(applyOffset, 300);
   try {{
+    if (window.parent.__cosRo) window.parent.__cosRo.disconnect();
     var ro = new ResizeObserver(applyOffset);
+    window.parent.__cosRo = ro;
     var sb = doc.querySelector('section[data-testid="stSidebar"]');
     if (sb) ro.observe(sb);
     // also watch for sidebar being added to DOM later
