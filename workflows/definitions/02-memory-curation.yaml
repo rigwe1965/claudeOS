@@ -1,0 +1,22 @@
+id: wf-memory-curation-001
+name: memory-curation
+display_name: "Memory Curation"
+description: "Weekly Sunday midnight — deduplicates and consolidates memory entries"
+trigger_type: schedule
+trigger_spec:
+  type: cron
+  day_of_week: "sun"
+  hour: 0
+  minute: 0
+  timezone: "Africa/Lagos"
+namespace: global
+enabled: true
+steps:
+  - step_id: curate
+    agent_name: memory-curator-agent
+    prompt_template: |
+      Review all memory entries in namespace {namespace}.
+      Identify duplicates, contradictions, and stale entries.
+      Output structured JSON with merge, expire, and keep recommendations plus a plain-text summary.
+    save_output: true
+    context: {}

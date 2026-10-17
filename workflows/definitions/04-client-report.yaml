@@ -1,0 +1,35 @@
+id: wf-client-report-001
+name: client-report
+display_name: "Client Weekly Report"
+description: "Friday 17:00 WAT — generates weekly status report for active client namespace"
+trigger_type: schedule
+trigger_spec:
+  type: cron
+  day_of_week: "fri"
+  hour: 17
+  minute: 0
+  timezone: "Africa/Lagos"
+namespace: global
+enabled: true
+steps:
+  - step_id: gather
+    agent_name: research-agent
+    prompt_template: |
+      Review all memory and recent activity for client namespace: {namespace}.
+      Summarise: work completed this week, blockers, next steps, open items.
+      Be factual and concise. Source from memory context.
+    save_output: false
+    context: {}
+  - step_id: report
+    agent_name: writing-agent
+    prompt_template: |
+      Using the following activity summary, write a professional weekly status report
+      for the client in namespace {namespace}.
+
+      Activity summary:
+      {previous_output}
+
+      Format: heading with date, 4 sections — Completed, In Progress, Blocked, Next Week.
+      Tone: professional, British English, no filler.
+    save_output: true
+    depends_on: [gather]

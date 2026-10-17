@@ -1,0 +1,23 @@
+id: wf-qa-sweep-001
+name: qa-sweep
+display_name: "QA Sweep"
+description: "Daily 06:00 WAT — quality assurance check on recent outputs and agent runs"
+trigger_type: schedule
+trigger_spec:
+  type: cron
+  day_of_week: "mon-fri"
+  hour: 6
+  minute: 0
+  timezone: "Africa/Lagos"
+namespace: global
+enabled: true
+steps:
+  - step_id: qa
+    agent_name: qa-agent
+    prompt_template: |
+      Review yesterday's agent runs and outputs for namespace {namespace}.
+      Check for: errors, low-quality outputs, incomplete tasks, anomalies.
+      Flag anything needing human review.
+      Output: pass/fail verdict per item, flagged items list, recommended actions.
+    save_output: true
+    context: {}

@@ -1,0 +1,32 @@
+id: wf-research-digest-001
+name: research-digest
+display_name: "Research Digest"
+description: "Manual trigger — deep research on a topic with synthesis and recommendations"
+trigger_type: manual
+trigger_spec: {}
+namespace: global
+enabled: true
+steps:
+  - step_id: research
+    agent_name: research-agent
+    prompt_template: |
+      Research the following topic thoroughly: {topic}
+
+      Additional context: {context_notes}
+
+      Produce: Overview, Key Facts, Key Players/Entities, Implications, Gaps, Sources.
+      End with 3 recommended next actions.
+    save_output: true
+    context:
+      topic: "general research"
+      context_notes: ""
+  - step_id: summarize
+    agent_name: writing-agent
+    prompt_template: |
+      Condense the following research into an executive summary (max 300 words):
+
+      {previous_output}
+
+      Format: clean markdown with a TL;DR line at the top.
+    save_output: true
+    depends_on: [research]

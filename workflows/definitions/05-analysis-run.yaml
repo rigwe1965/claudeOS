@@ -1,0 +1,34 @@
+id: wf-analysis-run-001
+name: analysis-run
+display_name: "Analysis Run"
+description: "Manual trigger — structured analysis of data, decisions, or situations"
+trigger_type: manual
+trigger_spec: {}
+namespace: global
+enabled: true
+steps:
+  - step_id: analyze
+    agent_name: analysis-agent
+    prompt_template: |
+      Perform a structured analysis of: {subject}
+
+      Available data: {data_summary}
+      Analysis goal: {analysis_goal}
+
+      Output: findings, patterns, risks, opportunities, recommendations.
+    save_output: true
+    context:
+      subject: ""
+      data_summary: ""
+      analysis_goal: "identify key insights and next actions"
+  - step_id: format
+    agent_name: writing-agent
+    prompt_template: |
+      Format the following analysis into a clean, structured report:
+
+      {previous_output}
+
+      Use clear headers. Include an executive summary at the top.
+      Keep it under 500 words total.
+    save_output: true
+    depends_on: [analyze]

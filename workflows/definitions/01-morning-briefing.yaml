@@ -1,0 +1,23 @@
+id: wf-morning-briefing-001
+name: morning-briefing
+display_name: "Morning Briefing"
+description: "Daily 07:00 WAT briefing — synthesizes overnight context into actionable brief"
+trigger_type: schedule
+trigger_spec:
+  type: cron
+  day_of_week: "mon-fri"
+  hour: 7
+  minute: 0
+  timezone: "Africa/Lagos"
+namespace: global
+enabled: true
+steps:
+  - step_id: briefing
+    agent_name: briefing-agent
+    prompt_template: |
+      Generate today's morning briefing for {date}.
+      Focus on: priority actions, active project status, client updates, scheduled work today.
+      Use all available memory context to populate real data.
+    save_output: true
+    context:
+      date: "{date}"

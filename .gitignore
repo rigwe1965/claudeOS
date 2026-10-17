@@ -1,0 +1,46 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Data (never commit)
+data/claudeos.db
+data/claudeos.db-shm
+data/claudeos.db-wal
+data/chromadb/
+data/backups/
+
+# Logs
+logs/
+
+# Outputs filesystem store
+outputs/store/
+
+# Vault workspace files (client data — never commit)
+vault/workspaces/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Local Claude Code settings (contain secrets/permission rules)
+.claude/settings.local.json
+
+# Claude Code agent worktrees
+.claude/worktrees/
+.pytest_cache/
+*.tmp.*

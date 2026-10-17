@@ -1,0 +1,45 @@
+id: wf-meta-orchestrate-001
+name: meta-orchestrate
+display_name: "Meta Orchestration"
+description: "Manual trigger — high-level orchestration of multi-agent tasks"
+trigger_type: manual
+trigger_spec: {}
+namespace: global
+enabled: true
+steps:
+  - step_id: plan
+    agent_name: meta-agent
+    prompt_template: |
+      You are the ClaudeOS meta-agent. Orchestrate the following task:
+
+      Task: {task}
+      Namespace: {namespace}
+      Constraints: {constraints}
+
+      Break the task into subtasks. For each subtask, identify which agent should handle it
+      and what their input should be. Output a structured execution plan.
+    save_output: true
+    context:
+      task: ""
+      constraints: "none"
+  - step_id: research
+    agent_name: research-agent
+    prompt_template: |
+      Based on this execution plan, gather background context needed:
+
+      {previous_output}
+
+      Focus on facts relevant to execution. Be brief — this feeds into action steps.
+    save_output: false
+    depends_on: [plan]
+  - step_id: execute_summary
+    agent_name: writing-agent
+    prompt_template: |
+      Synthesise the orchestration plan and research into a final action brief:
+
+      Plan: {output_plan}
+      Research context: {previous_output}
+
+      Output: clear action items with owner (agent or human), priority, and expected output.
+    save_output: true
+    depends_on: [research]
