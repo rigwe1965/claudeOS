@@ -19,6 +19,7 @@ from collections import defaultdict
 from typing import Optional
 
 from core.models import fast_model
+from core.utils import first_text
 
 logger = logging.getLogger("claudeos.memory.consolidator")
 
@@ -151,11 +152,11 @@ def _consolidate_cluster(namespace: str, category: str, entries: list[dict], sta
         client = _get_client()
         response = client.messages.create(
             model=fast_model(),
-            max_tokens=200,
+            max_tokens=1024,  # headroom: thinking tokens count against max_tokens on some models
             messages=[{"role": "user", "content": summary_prompt}],
             timeout=20.0,
         )
-        summary = response.content[0].text.strip() if response.content else ""
+        summary = first_text(response).strip()
         if not summary:
             return
 

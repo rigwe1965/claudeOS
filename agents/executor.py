@@ -530,10 +530,13 @@ def _write_activity_log(
         key = f"activity_log:{agent_name}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
         memory_engine.write(
             namespace=namespace,
-            category="activity_log",
+            category="context",  # a valid category; the 7-day TTL suits a rolling trail
             key=key,
             value=value,
             source="system",
+            # Below the 0.8–0.85 floors used for injected context, so the trail stays
+            # searchable without crowding the client profile out of agent prompts.
+            confidence=0.5,
             tags=["activity_log", agent_name, "auto"],
         )
     except Exception as e:
