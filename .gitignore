@@ -15,6 +15,7 @@ data/claudeos.db
 data/claudeos.db-shm
 data/claudeos.db-wal
 data/chromadb/
+data/chromadb_rebuild/
 data/backups/
 
 # Logs

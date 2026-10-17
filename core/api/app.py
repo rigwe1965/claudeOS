@@ -73,6 +73,11 @@ def create_app() -> Flask:
     # Workflow Scheduler — start after blueprints registered
     _start_scheduler(app)
 
+    # numpy must be imported once on this thread BEFORE the warmup threads below start: two threads
+    # importing it first at the same time can leave numpy._typing half-initialised and silently
+    # disable semantic search for the whole process (see memory/vector_store.py).
+    import numpy  # noqa: F401
+
     # Pre-load ChromaDB + sentence-transformers in background.
     # Without this, the first memory request blocks a Flask worker for 30-60s on Windows.
     _warmup_vector_store()
@@ -206,8 +211,10 @@ def _warmup_vector_store():
         try:
             log.info("ChromaDB warmup starting (sentence-transformers model load)...")
             from memory.vector_store import _init
-            _init()
-            log.info("ChromaDB warmup complete.")
+            if _init():
+                log.info("ChromaDB warmup complete.")
+            else:
+                log.warning("ChromaDB warmup FAILED — semantic search disabled, falling back to FTS")
         except Exception as e:
             log.warning("ChromaDB warmup failed (semantic search disabled): %s", e)
             try:
