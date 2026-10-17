@@ -156,3 +156,39 @@ def test_sync_reset_watermark_endpoint(client, admin_headers):
 def test_sync_push_unknown_table(client, admin_headers):
     resp = client.post("/api/v1/sync/push", json={"table": "hacker_table"}, headers=admin_headers)
     assert resp.status_code == 400
+
+
+def test_workflow_webhook_secret_never_pushed():
+    """Webhook secrets must not reach the cloud copy (audit H-2)."""
+    import sync.engine as se
+    from core.database import get_db
+    from core.utils import new_id
+
+    secret = "s3cr3t-" + "a" * 57
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO workflows (id, name, display_name, webhook_secret, webhook_enabled) "
+            "VALUES (?, ?, ?, ?, 1)",
+            (new_id(), "wf-secret-test", "WF Secret Test", secret),
+        )
+
+    pushed = []
+
+    class _Query:
+        def upsert(self, batch):
+            pushed.extend(batch)
+            return self
+
+        def execute(self):
+            return None
+
+    class _Client:
+        def table(self, name):
+            return _Query()
+
+    result = se._push_table(_Client(), "workflows", "created_at")
+
+    assert result.error is None
+    assert pushed, "expected the workflow row to be pushed"
+    assert all("webhook_secret" not in rec for rec in pushed)
+    assert secret not in repr(pushed)
