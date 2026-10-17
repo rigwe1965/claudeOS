@@ -54,6 +54,14 @@ def health():
     })
 
 
+@system_bp.get("/system/models")
+@require_auth
+def models_in_force():
+    """Which Claude models agents / eval / consolidation use right now, plus list prices."""
+    from core.models import model_info
+    return jsonify(model_info())
+
+
 @system_bp.get("/system/status")
 @require_auth
 def status():
@@ -244,8 +252,9 @@ def namespace_stats():
             last_cons  = row["last_cons"]
             out_count  = row["out_count"]
 
-            # Cost estimate (Claude Sonnet 4.6 pricing)
-            cost_usd = round((tokens_in / 1_000_000 * 3.0) + (tokens_out / 1_000_000 * 15.0), 4)
+            # Cost estimate at the active default model's price (core/models.py)
+            from core.models import estimate_cost, model_label
+            cost_usd = round(estimate_cost(tokens_in, tokens_out), 4)
 
             # Workflow success rate — separate query (JOIN makes it awkward in compound)
             wf_total, wf_ok = 0, 0
@@ -286,6 +295,7 @@ def namespace_stats():
         "tokens_in":      tokens_in,
         "tokens_out":     tokens_out,
         "cost_usd":       cost_usd,
+        "model_label":    model_label(),
         "run_count":      run_count,
         "eval_avg":       round(eval_avg, 2),
         "ticket_total":   t_total,
