@@ -40,6 +40,7 @@ _SYNC_TABLES: dict[str, str] = {
 _EXCLUDE_COLS: dict[str, list[str]] = {
     "outputs": ["file_path"],
     "users": ["password_hash", "failed_attempts", "locked_until"],
+    "workflows": ["webhook_secret"],
 }
 
 

@@ -47,7 +47,7 @@ Start: `.\scripts\start.ps1` (Flask + Streamlit, uses `.venv`), `.\scripts\start
 - Self-registration returns one generic error for missing vs wrong-type namespaces. Webhooks: 64KB body cap + context dict validation. Memory writes >64KB → 422. Bulk deletes capped at 200. Audit `?since=`/`?until=` validated as ISO. Admin PATCH user fields come from `_ALLOWED_USER_UPDATES` whitelist only.
 - Role gates: workflow delete/scheduler/webhook, projects namespace endpoints, memory consolidate → admin/operator; `/system/status` DB path/platform → admin/operator; last admin can't be deleted.
 - Output delete: SELECT-then-DELETE (no `RETURNING`, SQLite <3.35).
-- Known gaps, not yet fixed — see `audits/security-audit-2026-10-17.md`: Supabase sync leaks `workflows.webhook_secret` (H-2); operators can mint API keys (M-14).
+- Known gaps, not yet fixed — see `audits/security-audit-2026-10-17.md`: operators can mint API keys (M-14).
 
 ## Database
 - Auth: `users` (+`onboarding_done`), `user_sessions`, `auth_events`, `system_config`.
