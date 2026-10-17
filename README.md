@@ -7,12 +7,12 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.11+-407E3C?style=flat-square&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Flask-3.0-407E3C?style=flat-square&logo=flask&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Streamlit-1.56-407E3C?style=flat-square&logo=streamlit&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Supabase-cloud_sync-407E3C?style=flat-square&logo=supabase&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Windows-10-407E3C?style=flat-square&logo=windows&logoColor=white"/>
-  <img src="https://img.shields.io/badge/license-MIT-5a9e56?style=flat-square"/>
+  <img src="https://img.shields.io/badge/Python-3.11+-407E3C?style=flat-square&logo=python&logoColor=white" alt="Python 3.11+"/>
+  <img src="https://img.shields.io/badge/Flask-3.0-407E3C?style=flat-square&logo=flask&logoColor=white" alt="Flask 3.0"/>
+  <img src="https://img.shields.io/badge/Streamlit-1.56-407E3C?style=flat-square&logo=streamlit&logoColor=white" alt="Streamlit 1.56"/>
+  <img src="https://img.shields.io/badge/Supabase-cloud_sync-407E3C?style=flat-square&logo=supabase&logoColor=white" alt="Supabase cloud sync"/>
+  <img src="https://img.shields.io/badge/Windows-10-407E3C?style=flat-square&logo=windows&logoColor=white" alt="Windows 10"/>
+  <img src="https://img.shields.io/badge/license-MIT-5a9e56?style=flat-square" alt="MIT license"/>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │  Layer 0  · Streamlit Dashboard        :8501         │
 ├─────────────────────────────────────────────────────┤
@@ -70,7 +70,7 @@
 ## Roles
 
 | Role | Access |
-|------|--------|
+| ------ | -------- |
 | `admin` | Full access — all namespaces, user management, admin panel |
 | `operator` | All namespaces, all resources; no user management |
 | `client` | Own namespace only; read/write memory, run agents, view outputs |
@@ -80,6 +80,7 @@
 ## Setup
 
 ### Requirements
+
 - Python 3.11+
 - Windows 10 / PowerShell
 
@@ -126,10 +127,10 @@ python scripts/create_admin.py --username admin --password Admin123!
 ```
 
 | Service | URL |
-|---------|-----|
-| Dashboard | http://localhost:8501 |
-| API | http://localhost:5000/api/v1/health |
-| MCP Server | http://localhost:5100/mcp |
+| --------- | ----- |
+| Dashboard | <http://localhost:8501> |
+| API | <http://localhost:5000/api/v1/health> |
+| MCP Server | <http://localhost:5100/mcp> |
 
 ## Cloud Sync
 
@@ -147,6 +148,7 @@ Agent responses stream token-by-token via Server-Sent Events. Hit `GET /agents/<
 
 **LLM-as-Judge**
 After every agent run completes, an async background task dispatches the prompt+output to Claude Haiku for evaluation. Four dimensions scored 0–5:
+
 - Task Completion (weight 40%) — did the output address the prompt?
 - Factual Grounding (weight 30%) — are claims grounded in injected memory?
 - Conciseness (weight 20%) — appropriate length, no padding?
@@ -183,6 +185,7 @@ Each agent exposes a machine-readable capability card at `GET /agents/<name>/.we
 
 **Multi-Turn Chat UI**
 The Agents page adds a Chat tab with full conversational history per agent per session. Supports:
+
 - Streaming responses (tokens render as they arrive)
 - Image/screenshot upload for visual analysis
 - Voice input (record audio, auto-transcribed via Whisper)
@@ -224,7 +227,7 @@ Note: first voice transcription downloads ~140 MB Whisper model automatically.
 ## API Reference
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
+| -------- | ---------- | ------------- |
 | `GET` | `/api/v1/health` | System health (public) |
 | `GET/POST` | `/api/v1/memory` | Memory entries |
 | `POST` | `/api/v1/memory/consolidate` | Trigger memory consolidation |
@@ -266,7 +269,7 @@ Note: first voice transcription downloads ~140 MB Whisper model automatically.
 ## Stack
 
 | | |
-|--|--|
+| -- | -- |
 | **AI** | Anthropic SDK · claude-sonnet-5-5 (agents) · claude-haiku-5-5 (eval, consolidation) — set in `core/models.py` |
 | **Backend** | Flask · waitress (Windows WSGI) |
 | **Dashboard** | Streamlit |
@@ -283,7 +286,7 @@ Note: first voice transcription downloads ~140 MB Whisper model automatically.
 Models are chosen in one place, `core/models.py`, and every agent run, eval and consolidation job follows it.
 
 | `.env` setting | Effect | Default |
-|--|--|--|
+| -- | -- | -- |
 | `CLAUDE_MODEL` | Agents, chat, streaming | `claude-sonnet-5-5` |
 | `CLAUDE_FAST_MODEL` | Quality judge, memory consolidation | `claude-haiku-5-5` |
 | `CLAUDE_PRICE_IN_PER_MTOK` / `CLAUDE_PRICE_OUT_PER_MTOK` | USD per million tokens shown in cost estimates | built-in list price (Sonnet 5.5: $2 / $10) |
@@ -295,7 +298,7 @@ Models are chosen in one place, `core/models.py`, and every agent run, eval and 
 ## Troubleshooting
 
 | Symptom | Cause / fix |
-|--|--|
+| -- | -- |
 | Semantic search returns nothing, log shows `KeyError '_type'` | The ChromaDB index was written by a different chromadb version. Rebuild it from SQLite: `python scripts/reindex_vectors.py`, then stop the API, move `data/chromadb` to `data/backups/`, rename `data/chromadb_rebuild` to `data/chromadb`, and start the API. |
 | `ChromaDB warmup FAILED` in `logs/api.log` | Semantic search is off and memory falls back to keyword search. Check the warning above it; the index rebuild above fixes the `_type` case. |
 | Dashboard is down after `scripts/start.ps1` | On Windows PowerShell 5.1 a Streamlit warning on stderr can make the script exit and stop Streamlit. Start it directly: `.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.port 8501 --server.headless true` |
