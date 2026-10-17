@@ -91,7 +91,6 @@ def _do_evaluate(run_id: str, prompt: str, output_text: str, context: str) -> No
         response = client.messages.create(
             model=fast_model(),
             max_tokens=256,
-            temperature=0.0,
             messages=[{"role": "user", "content": eval_prompt}],
             timeout=30.0,
         )

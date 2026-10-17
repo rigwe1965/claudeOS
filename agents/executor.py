@@ -119,7 +119,6 @@ def execute(
                     response = client.messages.create(
                         model=model,
                         max_tokens=max_tokens,
-                        temperature=temperature,
                         system=system,
                         messages=api_messages,
                         timeout=120.0,
@@ -332,7 +331,6 @@ def execute_stream(
     with client.messages.stream(
         model=model,
         max_tokens=max_tokens,
-        temperature=temperature,
         system=system,
         messages=api_messages,
         timeout=120.0,
@@ -620,7 +618,6 @@ def _run_with_tools(
         response = client.messages.create(
             model=model,
             max_tokens=max_tokens,
-            temperature=temperature,
             system=system,
             messages=loop_messages,
             tools=tool_defs,
@@ -682,7 +679,6 @@ def _run_with_tools(
             final_response = client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
-                temperature=temperature,
                 system=system,
                 messages=loop_messages,
                 timeout=90.0,

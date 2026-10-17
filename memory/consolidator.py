@@ -152,7 +152,6 @@ def _consolidate_cluster(namespace: str, category: str, entries: list[dict], sta
         response = client.messages.create(
             model=fast_model(),
             max_tokens=200,
-            temperature=0.0,
             messages=[{"role": "user", "content": summary_prompt}],
             timeout=20.0,
         )
