@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+import ssl
 import uuid
 from datetime import datetime, timezone, timedelta
 from email.mime.base import MIMEBase
@@ -76,7 +77,7 @@ def send_reminder(
 
     with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
         server.ehlo()
-        server.starttls()
+        server.starttls(context=ssl.create_default_context())
         server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to, msg.as_string())
 
