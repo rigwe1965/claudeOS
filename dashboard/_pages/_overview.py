@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from html import escape as _esc
 from zoneinfo import ZoneInfo
-from dashboard.components.brand import aurora_hero, PRIMARY
+from dashboard.components.brand import aurora_hero, get_ns_brand, PRIMARY
 from dashboard.components.proxy import proxy_button, COS_CLICK_PROXY_JS
 
 _DISPLAY_TZ = ZoneInfo(os.environ.get("DISPLAY_TZ", "UTC"))
@@ -147,7 +147,7 @@ def render(api_get, api_post, bulk_delete=None):
     is_scoped = role in ("client", "viewer") and bool(user_ns)
     is_admin  = role in ("admin", "operator")
 
-    ns_brand = st.session_state.get("ns_brand", {})
+    ns_brand = get_ns_brand()
     hero_title = (ns_brand.get("company_name") or "ClaudeOS") if is_scoped and ns_brand else "ClaudeOS"
     aurora_hero(
         title=hero_title,
@@ -440,7 +440,7 @@ def _render_live_refresh_toggle() -> None:
     else:
         _muted = t["TEXT_MUTED"]
     st.markdown(
-        f'<div style="color:{_muted};font-size:0.75rem;text-align:center;">'
+        f'<div style="color:{_esc(_muted)};font-size:0.75rem;text-align:center;">'
         f'Auto-refresh: toggle "Live Activity" above · Quality scores powered by LLM-as-Judge</div>',
         unsafe_allow_html=True,
     )
