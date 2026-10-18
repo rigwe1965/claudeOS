@@ -253,14 +253,15 @@ def fetch_page(url: str, max_chars: int = 5000) -> str:
             )
         }
         # Follow redirects manually so every hop is re-validated against the SSRF guard
+        session = _public_only_session()
         current = url
         resp = None
         for _ in range(_MAX_REDIRECTS + 1):
             blocked = _blocked_url_reason(current)
             if blocked:
                 return f"Blocked URL: {blocked}"
-            resp = requests.get(current, headers=headers, timeout=12,
-                                allow_redirects=False, stream=True)
+            resp = session.get(current, headers=headers, timeout=12,
+                               allow_redirects=False, stream=True)
             if resp.is_redirect and resp.headers.get("Location"):
                 current = urljoin(current, resp.headers["Location"])
                 resp.close()
@@ -292,18 +293,70 @@ def _blocked_url_reason(url: str) -> str | None:
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return "only http(s) URLs are allowed"
+    _, reason = _resolve_public(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+    return reason
+
+
+def _resolve_public(host: str, port: int) -> tuple[str | None, str | None]:
+    """Resolve host; return (first address, None) if every address is public, else (None, reason)."""
     try:
-        infos = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80),
-                                   proto=socket.IPPROTO_TCP)
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except socket.gaierror:
-        return "host could not be resolved"
+        return None, "host could not be resolved"
     for info in infos:
         ip = ipaddress.ip_address(info[4][0].split("%")[0])
         if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
             ip = ip.ipv4_mapped
         if not ip.is_global:
-            return "private, loopback or link-local addresses are not allowed"
-    return None
+            return None, "private, loopback or link-local addresses are not allowed"
+    return infos[0][4][0], None
+
+
+def _public_only_session():
+    """requests.Session whose sockets connect only to a validated public address.
+
+    The pre-flight check in _blocked_url_reason is advisory; this is what binds the checked
+    address to the connection (closes DNS-rebinding and URL-parser-differential gaps). The
+    hostname is kept for Host, SNI and certificate verification.
+    """
+    import requests
+    from requests.adapters import HTTPAdapter
+    from urllib3.connection import HTTPConnection, HTTPSConnection
+    from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
+    from urllib3.exceptions import NewConnectionError
+    from urllib3.util.connection import create_connection
+
+    class _PinnedMixin:
+        def _new_conn(self):
+            ip, reason = _resolve_public(self._dns_host, self.port)
+            if reason:
+                raise NewConnectionError(self, f"Blocked: {reason}")
+            return create_connection((ip, self.port), self.timeout,
+                                     source_address=self.source_address,
+                                     socket_options=self.socket_options)
+
+    class _Conn(_PinnedMixin, HTTPConnection):
+        pass
+
+    class _SConn(_PinnedMixin, HTTPSConnection):
+        pass
+
+    class _Pool(HTTPConnectionPool):
+        ConnectionCls = _Conn
+
+    class _SPool(HTTPSConnectionPool):
+        ConnectionCls = _SConn
+
+    class _Adapter(HTTPAdapter):
+        def init_poolmanager(self, *args, **kwargs):
+            super().init_poolmanager(*args, **kwargs)
+            self.poolmanager.pool_classes_by_scheme = {"http": _Pool, "https": _SPool}
+
+    session = requests.Session()
+    session.trust_env = False  # env proxies would pick the destination, bypassing the pinned sockets
+    session.mount("http://", _Adapter())
+    session.mount("https://", _Adapter())
+    return session
 
 
 # ── Private: multi-search ─────────────────────────────────────────────────────
