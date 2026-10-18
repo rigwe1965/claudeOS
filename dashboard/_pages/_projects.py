@@ -246,8 +246,13 @@ def _render_context(api_get, api_post, namespaces: list):
 # ── Directory scan ────────────────────────────────────────────────────────────
 
 def _scan_directory(path_str: str) -> dict:
-    """Scan a local directory and infer project metadata. Never raises."""
+    """Scan a local directory for admins/operators and infer project metadata."""
     result = {"ok": False, "error": None, "name": "", "slug": "", "description": "", "tech_stack": []}
+
+    # Local reads bypass API authorization; enforce the project attachment roles here.
+    if st.session_state.get("user_role") not in ("admin", "operator"):
+        result["error"] = "Directory scanning requires an admin or operator account."
+        return result
 
     try:
         p = Path(path_str.strip())
@@ -389,6 +394,10 @@ def _scan_directory(path_str: str) -> dict:
 # ── Forms ─────────────────────────────────────────────────────────────────────
 
 def _attach_project_form(api_post, namespaces: list):
+    if st.session_state.get("user_role") not in ("admin", "operator"):
+        st.info("Attaching projects requires an admin or operator account.")
+        return
+
     ns_map = {ns["display_name"]: ns["id"] for ns in namespaces}
     if not ns_map:
         st.info("Create a namespace first.")
