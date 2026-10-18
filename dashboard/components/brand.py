@@ -8,6 +8,7 @@ from html import escape as _esc
 import streamlit as st
 import streamlit.components.v1 as _components
 from dashboard.components.proxy import PROXY_CSS
+from vault.schemas import safe_brand_colors
 
 PRIMARY       = "#407E3C"
 ACCENT        = "#5a9e56"
@@ -98,7 +99,7 @@ def get_ns_brand() -> dict:
     """Return namespace branding overrides stored in session_state.
     Keys: color, icon, company_name, accent_color, bg_color.
     Empty dict when admin/operator or no branding configured."""
-    return st.session_state.get("ns_brand") or {}
+    return safe_brand_colors(st.session_state.get("ns_brand") or {})
 
 
 # ── Custom background helpers ─────────────────────────────────────────────────
@@ -260,6 +261,7 @@ def _ns_brand_css(brand: dict, _theme_override: str | None = None) -> str:
     Light mode: uses brand tokens directly (ivory/plum palette).
     Dark mode: derives a deep dark variant from the brand primary color.
     """
+    brand = safe_brand_colors(brand)
     color = (brand.get("color") or "").strip()
     if not color or not color.startswith("#"):
         return ""
@@ -2171,12 +2173,12 @@ def sidebar_logo():
         c2 = b_accent if b_accent else t["LOGO2"]
         st.sidebar.markdown(f"""
 <div style="padding:1rem 0.5rem;text-align:center;">
-  <div style="font-size:1.35rem;font-weight:800;color:{c1};
+  <div style="font-size:1.35rem;font-weight:800;color:{_esc(c1)};
               letter-spacing:1px;font-family:'Inter',sans-serif;line-height:1.2;">
     {icon + " " if icon else ""}{_esc(company)}
   </div>
   <div style="font-size:0.62rem;color:{t['TEXT_MUTED']};letter-spacing:1px;margin-top:3px;">
-    POWERED BY <span style="color:{c2};font-weight:700;">CLAUDEOS</span>
+    POWERED BY <span style="color:{_esc(c2)};font-weight:700;">CLAUDEOS</span>
   </div>
 </div>
 """, unsafe_allow_html=True)

@@ -17,7 +17,7 @@ from typing import Optional
 
 from core.database import get_db
 from core.utils import new_id, utcnow_str
-from vault.schemas import Namespace, NamespaceCreate, Project, ProjectCreate
+from vault.schemas import Namespace, NamespaceCreate, Project, ProjectCreate, safe_brand_colors
 
 logger = logging.getLogger("claudeos.vault.manager")
 
@@ -252,7 +252,7 @@ def _validate_filename(filename: str) -> None:
 
 def _row_to_namespace(row) -> Namespace:
     d = dict(row)
-    d["metadata"] = json.loads(d.get("metadata") or "{}")
+    d["metadata"] = safe_brand_colors(json.loads(d.get("metadata") or "{}"))
     d["enabled"] = bool(d.get("enabled", 1))
     return Namespace(**d)
 
