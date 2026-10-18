@@ -573,17 +573,49 @@ def _format_news_results(articles: list[dict]) -> str:
     return "\n".join(lines)
 
 
+_TAG_START_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)")
+_SKIP_OPEN = frozenset({"script", "style", "nav", "header", "footer", "noscript", "aside", "iframe", "svg"})
+_SKIP_CLOSE_RE = re.compile(r"</(?:script|style|nav|header|footer|noscript|aside|iframe|svg)\s*>", re.IGNORECASE)
+
+
 def _extract_text(html_content: str) -> str:
-    """Strip HTML and return clean readable text."""
-    # Remove scripts, styles, nav, header, footer, ads
-    text = re.sub(
-        r"<(script|style|nav|header|footer|noscript|aside|iframe|svg)[^>]*>.*?</(script|style|nav|header|footer|noscript|aside|iframe|svg)>",
-        " ", html_content, flags=re.DOTALL | re.IGNORECASE,
-    )
-    # Remove all remaining HTML tags
-    text = re.sub(r"<[^>]+>", " ", text)
-    # Decode HTML entities
-    text = html.unescape(text)
+    """Strip HTML and return clean readable text.
+
+    Single forward pass: every search that fails is remembered, so malformed input
+    (unclosed tags, comments, scripts) costs O(n) rather than O(n^2).
+    """
+    parts: list[str] = []
+    pos, n = 0, len(html_content)
+    no_gt = no_comment_end = no_skip_close = False
+    while pos < n:
+        lt = html_content.find("<", pos)
+        if lt == -1 or no_gt:
+            parts.append(html_content[pos:])
+            break
+        parts.append(html_content[pos:lt])
+        if not no_comment_end and html_content.startswith("<!--", lt):
+            end = html_content.find("-->", lt + 4)
+            if end != -1:
+                parts.append(" ")
+                pos = end + 3
+                continue
+            no_comment_end = True
+        m = _TAG_START_RE.match(html_content, lt)
+        if m and not m.group(1) and m.group(2).lower() in _SKIP_OPEN and not no_skip_close:
+            close = _SKIP_CLOSE_RE.search(html_content, m.end())
+            if close:
+                parts.append(" ")
+                pos = close.end()
+                continue
+            no_skip_close = True
+        gt = html_content.find(">", lt + 1)
+        if gt == -1:
+            no_gt = True
+            parts.append(html_content[lt:])
+            break
+        parts.append(" ")
+        pos = gt + 1
+    text = html.unescape("".join(parts))
     # Normalize whitespace
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
