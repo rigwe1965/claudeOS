@@ -37,6 +37,10 @@ def create_namespace():
         data = NamespaceCreate(**body)
     except Exception as e:
         return jsonify({"error": str(e)}), 422
+    from vault.schemas import validate_brand_metadata
+    err = validate_brand_metadata(data.metadata)
+    if err:
+        return jsonify({"error": err}), 422
     try:
         ns = _create(data)
     except Exception as e:
@@ -65,9 +69,10 @@ def update_namespace(slug: str):
     if not ns:
         return jsonify({"error": "Namespace not found"}), 404
     updates = request.get_json(silent=True) or {}
-    from vault.schemas import validate_brand_fields
+    from vault.schemas import validate_brand_fields, validate_brand_metadata
     meta = updates.get("metadata") if isinstance(updates.get("metadata"), dict) else {}
-    err = validate_brand_fields(updates.get("color"), updates.get("icon"), meta.get("accent_color"))
+    err = (validate_brand_fields(updates.get("color"), updates.get("icon"), meta.get("accent_color"))
+           or validate_brand_metadata(meta))
     if err:
         return jsonify({"error": err}), 422
     updated = _update(ns.id, updates)

@@ -140,9 +140,14 @@ if _role_now in ("client", "viewer") and _ns_now:
             )
             if _nb.ok:
                 _nd = _nb.json()
-                _nm = _nd.get("metadata") or {}
+                _nm = dict(_nd.get("metadata") or {})
+                # Stored metadata may predate validation: blank any colour that is not #RRGGBB
+                from vault.schemas import BRAND_COLOR_META_KEYS, validate_brand_fields, validate_brand_metadata
+                for _k in BRAND_COLOR_META_KEYS:
+                    if validate_brand_metadata({_k: _nm.get(_k)}):
+                        _nm[_k] = ""
                 st.session_state["ns_brand"] = {
-                    "color":            (_nd.get("color") or "").strip(),
+                    "color":            (_nd.get("color") or "").strip() if not validate_brand_fields(color=_nd.get("color")) else "",
                     "icon":             (_nd.get("icon") or "").strip(),
                     "company_name":     (_nm.get("company_name") or "").strip(),
                     "accent_color":     (_nm.get("accent_color") or "").strip(),

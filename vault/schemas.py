@@ -18,6 +18,23 @@ def validate_brand_fields(color: Any = None, icon: Any = None, accent: Any = Non
     return None
 
 
+BRAND_COLOR_META_KEYS = (
+    "accent_color", "bg_color", "hover_color", "surface_color", "surface2_color",
+    "text_color", "text_muted_color", "border_color", "input_bg",
+)
+
+
+def validate_brand_metadata(meta: Any) -> Optional[str]:
+    """Return an error message if any colour in namespace metadata is not a #RRGGBB hex value."""
+    if not isinstance(meta, dict):
+        return None
+    for key in BRAND_COLOR_META_KEYS:
+        val = meta.get(key)
+        if val not in (None, "") and not (isinstance(val, str) and _HEX_COLOR.match(val)):
+            return f"{key} must be a #RRGGBB hex value"
+    return None
+
+
 class NamespaceCreate(BaseModel):
     slug: str
     display_name: str
