@@ -55,15 +55,15 @@ def send_email(to: str, subject: str, body_html: str) -> bool:
         msg["To"]      = to
         msg.attach(MIMEText(body_html, "html", "utf-8"))
 
-        tls_ctx = ssl.create_default_context()  # verifies cert chain + hostname
+        context = ssl.create_default_context()
         if port == 465:
-            with smtplib.SMTP_SSL(host, port, timeout=10, context=tls_ctx) as smtp:
+            with smtplib.SMTP_SSL(host, port, timeout=10, context=context) as smtp:
                 smtp.login(user, pwd)
                 smtp.sendmail(frm, [to], msg.as_string())
         else:
             with smtplib.SMTP(host, port, timeout=10) as smtp:
                 smtp.ehlo()
-                smtp.starttls(context=tls_ctx)
+                smtp.starttls(context=context)
                 smtp.login(user, pwd)
                 smtp.sendmail(frm, [to], msg.as_string())
 

@@ -244,6 +244,7 @@ def fetch_page(url: str, max_chars: int = 5000) -> str:
 
     try:
         import requests
+        import urllib3
         from urllib.parse import urljoin
         headers = {
             "User-Agent": (
@@ -252,28 +253,43 @@ def fetch_page(url: str, max_chars: int = 5000) -> str:
                 "Chrome/120.0.0.0 Safari/537.36"
             )
         }
-        # Follow redirects manually so every hop is re-validated against the SSRF guard
-        session = _public_only_session()
+        # Each hop gets its own pool, pinned to a validated numeric address.
+        # Direct pools do not use environment proxies or resolve the hostname again.
         current = url
-        resp = None
         for _ in range(_MAX_REDIRECTS + 1):
-            blocked = _blocked_url_reason(current)
-            if blocked:
-                return f"Blocked URL: {blocked}"
-            resp = session.get(current, headers=headers, timeout=12,
-                               allow_redirects=False, stream=True)
-            if resp.is_redirect and resp.headers.get("Location"):
-                current = urljoin(current, resp.headers["Location"])
-                resp.close()
-                resp = None
-                continue
+            try:
+                prepared, address = _prepare_public_request(current, headers)
+            except ValueError as e:
+                return f"Blocked URL: {e}"
+            target = urlparse(prepared.url)
+            pool_type = urllib3.HTTPConnectionPool
+            tls = {}
+            if target.scheme == "https":
+                pool_type = urllib3.HTTPSConnectionPool
+                tls = {
+                    "cert_reqs": "CERT_REQUIRED",
+                    "ca_certs": requests.certs.where(),
+                    "server_hostname": target.hostname,
+                    "assert_hostname": target.hostname,
+                }
+            port = target.port or (443 if target.scheme == "https" else 80)
+            with pool_type(address, port=port, **tls) as pool:
+                with pool.urlopen(
+                    "GET", prepared.path_url,
+                    headers={**prepared.headers, "Host": target.netloc},
+                    timeout=12, redirect=False, retries=False, preload_content=False,
+                ) as resp:
+                    location = resp.get_redirect_location()
+                    if location:
+                        current = urljoin(prepared.url, location)
+                        continue
+                    if resp.status >= 400:
+                        return f"Failed to fetch page: HTTP {resp.status}"
+                    raw = resp.read(_MAX_FETCH_BYTES + 1, decode_content=True)
+                    encoding = requests.utils.get_encoding_from_headers(resp.headers) or "utf-8"
             break
-        if resp is None:
+        else:
             return "Failed to fetch page: too many redirects."
-        resp.raise_for_status()
-        raw = resp.raw.read(_MAX_FETCH_BYTES + 1, decode_content=True)
-        resp.close()
-        encoding = resp.encoding or "utf-8"
         text = _extract_text(raw[:_MAX_FETCH_BYTES].decode(encoding, errors="replace"))
         if not text:
             return "Page loaded but no readable text content found."
@@ -288,75 +304,44 @@ _MAX_REDIRECTS = 4
 _MAX_FETCH_BYTES = 2_000_000
 
 
-def _blocked_url_reason(url: str) -> str | None:
-    """Return a reason string if the URL targets a non-public address, else None."""
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return "only http(s) URLs are allowed"
-    _, reason = _resolve_public(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
-    return reason
-
-
-def _resolve_public(host: str, port: int) -> tuple[str | None, str | None]:
-    """Resolve host; return (first address, None) if every address is public, else (None, reason)."""
-    try:
-        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
-    except socket.gaierror:
-        return None, "host could not be resolved"
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0].split("%")[0])
-        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-            ip = ip.ipv4_mapped
-        if not ip.is_global:
-            return None, "private, loopback or link-local addresses are not allowed"
-    return infos[0][4][0], None
-
-
-def _public_only_session():
-    """requests.Session whose sockets connect only to a validated public address.
-
-    The pre-flight check in _blocked_url_reason is advisory; this is what binds the checked
-    address to the connection (closes DNS-rebinding and URL-parser-differential gaps). The
-    hostname is kept for Host, SNI and certificate verification.
-    """
+def _prepare_public_request(url: str, headers: dict):
+    """Prepare the actual URL and return it with a validated numeric destination."""
     import requests
-    from requests.adapters import HTTPAdapter
-    from urllib3.connection import HTTPConnection, HTTPSConnection
-    from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
-    from urllib3.exceptions import NewConnectionError
-    from urllib3.util.connection import create_connection
 
-    class _PinnedMixin:
-        def _new_conn(self):
-            ip, reason = _resolve_public(self._dns_host, self.port)
-            if reason:
-                raise NewConnectionError(self, f"Blocked: {reason}")
-            return create_connection((ip, self.port), self.timeout,
-                                     source_address=self.source_address,
-                                     socket_options=self.socket_options)
+    # Reject authority syntax that URL parsers can interpret differently, including
+    # backslashes, userinfo, encoded hosts and scoped IPv6 addresses.
+    if re.search(r"[\x00-\x1f\x7f]", url):
+        raise ValueError("ambiguous URL syntax is not allowed")
+    original = urlparse(url)
+    if original.scheme not in ("http", "https") or not original.hostname:
+        raise ValueError("only http(s) URLs are allowed")
+    if re.search(r"[\\\s]", original.netloc):
+        raise ValueError("ambiguous URL authority is not allowed")
+    if original.username is not None or "%" in original.netloc:
+        raise ValueError("userinfo and encoded hosts are not allowed")
 
-    class _Conn(_PinnedMixin, HTTPConnection):
-        pass
-
-    class _SConn(_PinnedMixin, HTTPSConnection):
-        pass
-
-    class _Pool(HTTPConnectionPool):
-        ConnectionCls = _Conn
-
-    class _SPool(HTTPSConnectionPool):
-        ConnectionCls = _SConn
-
-    class _Adapter(HTTPAdapter):
-        def init_poolmanager(self, *args, **kwargs):
-            super().init_poolmanager(*args, **kwargs)
-            self.poolmanager.pool_classes_by_scheme = {"http": _Pool, "https": _SPool}
-
-    session = requests.Session()
-    session.trust_env = False  # env proxies would pick the destination, bypassing the pinned sockets
-    session.mount("http://", _Adapter())
-    session.mount("https://", _Adapter())
-    return session
+    prepared = requests.Request("GET", url, headers=headers).prepare()
+    parsed = urlparse(prepared.url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("only http(s) URLs are allowed")
+    port = parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80)
+    if not 1 <= port <= 65535:
+        raise ValueError("invalid port")
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM,
+                                   proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        raise ValueError("host could not be resolved") from e
+    if not infos:
+        raise ValueError("host could not be resolved")
+    addresses = []
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        checked_ip = ip.ipv4_mapped if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped else ip
+        if not checked_ip.is_global:
+            raise ValueError("private, loopback or link-local addresses are not allowed")
+        addresses.append(str(ip))
+    return prepared, addresses[0]
 
 
 # ── Private: multi-search ─────────────────────────────────────────────────────
@@ -579,43 +564,34 @@ _SKIP_CLOSE_RE = re.compile(r"</(?:script|style|nav|header|footer|noscript|aside
 
 
 def _extract_text(html_content: str) -> str:
-    """Strip HTML and return clean readable text.
-
-    Single forward pass: every search that fails is remembered, so malformed input
-    (unclosed tags, comments, scripts) costs O(n) rather than O(n^2).
-    """
-    parts: list[str] = []
-    pos, n = 0, len(html_content)
-    no_gt = no_comment_end = no_skip_close = False
-    while pos < n:
-        lt = html_content.find("<", pos)
-        if lt == -1 or no_gt:
-            parts.append(html_content[pos:])
-            break
-        parts.append(html_content[pos:lt])
-        if not no_comment_end and html_content.startswith("<!--", lt):
-            end = html_content.find("-->", lt + 4)
-            if end != -1:
-                parts.append(" ")
-                pos = end + 3
-                continue
-            no_comment_end = True
-        m = _TAG_START_RE.match(html_content, lt)
-        if m and not m.group(1) and m.group(2).lower() in _SKIP_OPEN and not no_skip_close:
-            close = _SKIP_CLOSE_RE.search(html_content, m.end())
-            if close:
-                parts.append(" ")
-                pos = close.end()
-                continue
-            no_skip_close = True
-        gt = html_content.find(">", lt + 1)
-        if gt == -1:
-            no_gt = True
-            parts.append(html_content[lt:])
-            break
-        parts.append(" ")
-        pos = gt + 1
-    text = html.unescape("".join(parts))
+    """Strip HTML and return clean readable text."""
+    ignored_tags = {"script", "style", "nav", "header", "footer", "noscript", "aside", "iframe", "svg"}
+    hidden = []
+    parts = []
+    position = 0
+    # Stop each token at another '<' as well as '>'. Failed matches cannot
+    # rescan the same suffix, even for repeated unclosed or incomplete tags.
+    for token in re.finditer(r"<[^<>]*>", html_content):
+        if not hidden:
+            parts.extend((html_content[position:token.start()], " "))
+        tag = re.match(r"<(/?)([^\s/>]+)", token.group())
+        if tag:
+            closing, name = tag.groups()
+            name = name.lower()
+            if closing:
+                if hidden and hidden[-1] == name:
+                    hidden.pop()
+            elif hidden and hidden[-1] in {"script", "style"}:
+                # Script/style bodies are raw text, including apparent tags.
+                pass
+            elif name in ignored_tags and not token.group().endswith("/>"):
+                hidden.append(name)
+        position = token.end()
+    if not hidden:
+        parts.append(html_content[position:])
+    text = "".join(parts)
+    # Decode HTML entities
+    text = html.unescape(text)
     # Normalize whitespace
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)

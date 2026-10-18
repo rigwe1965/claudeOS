@@ -39,7 +39,7 @@ _SYNC_TABLES: dict[str, str] = {
 # Columns to exclude from sync (sensitive or local-only data)
 _EXCLUDE_COLS: dict[str, list[str]] = {
     "outputs": ["file_path"],
-    "users": ["password_hash", "failed_attempts", "locked_until"],
+    "users": ["password_hash", "failed_attempts", "locked_until", "token_generation"],
     "workflows": ["webhook_secret"],
 }
 
@@ -209,27 +209,22 @@ def _push_table(sb, table: str, ts_col: str) -> TableSyncResult:
             rows_ok += len(batch)
         except Exception as e:
             logger.error("Upsert failed for %s batch %d: %s", table, i // batch_size, e)
-            error_msg = str(e)[:500]
-            # Isolate the rejected record(s) so one bad row can't suppress its batch-mates
-            for j, rec in enumerate(batch, start=i):
+            if len(batch) == 1:
+                rows_fail += 1
+                error_msg = str(e)[:500]
+                continue
+            # Isolate rejected records so they cannot block valid rows in this batch.
+            for record in batch:
                 try:
-                    sb.table(table).upsert([rec]).execute()
+                    sb.table(table).upsert([record]).execute()
                     rows_ok += 1
-                except Exception:
+                except Exception as row_error:
                     rows_fail += 1
-                    if first_failed is None:
-                        first_failed = j
+                    error_msg = str(row_error)[:500]
 
     duration = _ms(t0)
-    if first_failed is None:
-        new_watermark = records[-1].get(ts_col, now)
-    else:
-        # Never advance past an undelivered record; ts ties with it must be retried too
-        failed_ts = records[first_failed].get(ts_col)
-        new_watermark = watermark
-        for rec in records[:first_failed]:
-            if rec.get(ts_col) is not None and rec[ts_col] < failed_ts:
-                new_watermark = rec[ts_col]
+    # Keep every failed row eligible for retry, including on the first sync.
+    new_watermark = records[-1].get(ts_col, now) if rows_fail == 0 else watermark
     _update_watermark(table, new_watermark, rows_ok, rows_fail, error_msg)
     _log_sync_run(log_id, table, rows_ok, rows_fail, duration, error_msg, now)
 
@@ -284,7 +279,7 @@ def _ms(t0: float) -> int:
 
 def _update_watermark(
     table: str,
-    last_synced_at: str,
+    last_synced_at: Optional[str],
     rows_pushed: int,
     rows_failed: int,
     error: Optional[str],

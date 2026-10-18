@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
-from dashboard.components.brand import inject, sidebar_logo, theme_toggle, system_health_bar, clear_health_bar, PRIMARY, get_theme_vars
+from dashboard.components.brand import inject, sidebar_logo, theme_toggle, system_health_bar, clear_health_bar, PRIMARY, get_theme_vars, get_ns_brand
 
 # Restore the chosen theme after a browser refresh (session_state is reset, URL is not).
 # Must run BEFORE inject() so the first render already uses the right palette.
@@ -439,7 +439,7 @@ st.sidebar.markdown("---")
 
 # User info + logout
 _tv = get_theme_vars()
-_sidebar_brand = st.session_state.get("ns_brand") or {}
+_sidebar_brand = get_ns_brand()
 _brand_primary = (_sidebar_brand.get("color") or "").strip() or PRIMARY
 _brand_muted   = (_sidebar_brand.get("text_muted_color") or "").strip() or _tv["TEXT_MUTED"]
 _user_ns = st.session_state.get("user_namespace")

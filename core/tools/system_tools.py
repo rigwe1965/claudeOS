@@ -273,7 +273,6 @@ def _get_output(output_id: str, namespace: str) -> str:
         ).fetchone()
 
     if not row:
-        # Same response for missing and other-namespace outputs (no cross-namespace existence oracle)
         return f"Output '{output_id}' not found. Use search_outputs or get_recent_outputs to find valid IDs."
 
     tags = []

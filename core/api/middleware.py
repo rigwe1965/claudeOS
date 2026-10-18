@@ -31,7 +31,8 @@ def register_middleware(app):
         logger.info(
             "%s %s %s %dms",
             request.method,
-            _log_safe(_SESSION_HANDLE_RE.sub(r"\1[redacted]", request.path)),
+            # URL paths can contain credentials (dashboard session handles).
+            request.url_rule.rule if request.url_rule else "unmatched",
             response.status_code,
             duration_ms,
         )

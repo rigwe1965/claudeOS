@@ -81,7 +81,7 @@ def save(
             ),
         )
 
-    logger.info("Saved output %s (%s, %d bytes, ns=%s)", output_id[:8], output_type, size_bytes, namespace)
+    logger.info("Saved output %s (%r, %d bytes, ns=%r)", output_id[:8], output_type, size_bytes, namespace)
     return Output(
         id=output_id,
         namespace=namespace,
@@ -114,6 +114,8 @@ def list_outputs(
     limit: int = 50,
     offset: int = 0,
 ) -> list[Output]:
+    """List metadata; content is empty (use get_by_id for the full output)."""
+    _validate_pagination(limit, maximum=200, offset=offset)
     conditions, params = ["deleted_at IS NULL"], []
     if namespace:
         conditions.append("namespace = ?")
@@ -130,7 +132,10 @@ def list_outputs(
     params += [max(1, min(limit, 200)), max(0, offset)]
     with get_db() as conn:
         rows = conn.execute(
-            f"SELECT * FROM outputs {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            f"""SELECT id, namespace, project_id, agent_run_id, workflow_run_id,
+                       type, title, '' AS content, format, tags, file_path,
+                       size_bytes, summary, created_at, updated_at
+                FROM outputs {where} ORDER BY created_at DESC LIMIT ? OFFSET ?""",
             params,
         ).fetchall()
     return [_row_to_output(r) for r in rows]
@@ -138,6 +143,7 @@ def list_outputs(
 
 def search(query: str, namespace: Optional[str] = None, limit: int = 20) -> list[OutputSearchResult]:
     """FTS5 full-text search across title, content, tags, summary."""
+    _validate_pagination(limit, maximum=100)
     if not query.strip():
         return []
 
@@ -270,6 +276,13 @@ def get_stats_all() -> dict:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _validate_pagination(limit: int, maximum: int, offset: int = 0) -> None:
+    if type(limit) is not int or not 1 <= limit <= maximum:
+        raise ValueError(f"limit must be an integer between 1 and {maximum}")
+    if type(offset) is not int or not 0 <= offset <= 2**63 - 1:
+        raise ValueError("offset must be a nonnegative signed 64-bit integer")
+
 
 def _safe_path_segment(s: str) -> str:
     """Strip path separators and dotdot sequences, bound length."""

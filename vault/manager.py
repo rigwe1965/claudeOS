@@ -17,7 +17,7 @@ from typing import Optional
 
 from core.database import get_db
 from core.utils import new_id, utcnow_str
-from vault.schemas import Namespace, NamespaceCreate, Project, ProjectCreate
+from vault.schemas import Namespace, NamespaceCreate, Project, ProjectCreate, safe_brand_colors
 
 logger = logging.getLogger("claudeos.vault.manager")
 
@@ -28,7 +28,7 @@ WORKSPACE_SUBDIRS = ("context", "memory", "outputs")
 # ── Namespace ─────────────────────────────────────────────────────────────────
 
 def create_namespace(data: NamespaceCreate) -> Namespace:
-    _validate_slug(data.slug)  # before the INSERT: the slug becomes a directory name
+    _validate_slug(data.slug)
     ns_id = new_id()
     now = utcnow_str()
     with get_db() as conn:
@@ -43,7 +43,7 @@ def create_namespace(data: NamespaceCreate) -> Namespace:
                 json.dumps(data.metadata), now,
             ),
         )
-    _provision_workspace(data.slug)
+        _provision_workspace(data.slug)
     logger.info("Created namespace: %s", data.slug)
     return get_namespace_by_slug(data.slug)
 
@@ -231,10 +231,13 @@ def get_workspace_stats(slug: str) -> dict:
 
 def _provision_workspace(slug: str) -> None:
     _validate_slug(slug)
-    for subdir in WORKSPACE_SUBDIRS:
-        d = VAULT_ROOT / slug / subdir
-        d.resolve().relative_to(VAULT_ROOT.resolve())  # ValueError if it escapes the vault root
-        d.mkdir(parents=True, exist_ok=True)
+    workspace = VAULT_ROOT.resolve() / slug
+    paths = [(workspace / subdir).resolve() for subdir in WORKSPACE_SUBDIRS]
+    # Check every destination before creating anything, including existing symlinks.
+    if any(workspace not in path.parents for path in paths):
+        raise ValueError(f"Workspace path escapes namespace: {slug!r}")
+    for path in paths:
+        path.mkdir(parents=True, exist_ok=True)
     logger.info("Provisioned workspace: vault/workspaces/%s/", slug)
 
 
@@ -256,7 +259,7 @@ def _validate_filename(filename: str) -> None:
 
 def _row_to_namespace(row) -> Namespace:
     d = dict(row)
-    d["metadata"] = json.loads(d.get("metadata") or "{}")
+    d["metadata"] = safe_brand_colors(json.loads(d.get("metadata") or "{}"))
     d["enabled"] = bool(d.get("enabled", 1))
     return Namespace(**d)
 

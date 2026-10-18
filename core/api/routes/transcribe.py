@@ -7,10 +7,13 @@ from core.auth import require_auth
 
 transcribe_bp = Blueprint("transcribe", __name__, url_prefix="/api/v1")
 
-# Header-declared values are untrusted: bound them before any resampling allocation.
-_MIN_SAMPLE_RATE = 8_000
-_MAX_SAMPLE_RATE = 192_000
-_MAX_AUDIO_SECONDS = 600
+# Common WAV rates keep reduced resampling factors <= 1764 at 16 kHz,
+# bounding SciPy's filter allocation as well as the output below.
+_SUPPORTED_SAMPLE_RATES = frozenset({
+    8000, 11025, 12000, 16000, 22050, 24000, 32000,
+    44100, 48000, 88200, 96000, 176400, 192000,
+})
+_MAX_AUDIO_SECONDS = 300
 
 
 @transcribe_bp.route("/transcribe", methods=["POST"])
@@ -30,10 +33,12 @@ def transcribe_audio():
 
         sample_rate, data = wavfile.read(io.BytesIO(audio_bytes))
 
-        if not _MIN_SAMPLE_RATE <= sample_rate <= _MAX_SAMPLE_RATE:
-            return jsonify({"error": "Unsupported sample rate"}), 400
-        if len(data) / sample_rate > _MAX_AUDIO_SECONDS:
-            return jsonify({"error": "Audio too long"}), 400
+        if sample_rate not in _SUPPORTED_SAMPLE_RATES:
+            return jsonify({"error": "Unsupported audio sample rate"}), 400
+        target_sr = whisper.audio.SAMPLE_RATE
+        output_samples = (data.shape[0] * target_sr + sample_rate - 1) // sample_rate
+        if output_samples > target_sr * _MAX_AUDIO_SECONDS:
+            return jsonify({"error": "Audio exceeds five minute limit"}), 413
 
         # Convert to float32 mono
         if data.ndim > 1:
@@ -46,7 +51,6 @@ def transcribe_audio():
             data = data.astype(np.float32)
 
         # Resample to 16 kHz if needed
-        target_sr = whisper.audio.SAMPLE_RATE
         if sample_rate != target_sr:
             from scipy.signal import resample_poly
             from math import gcd

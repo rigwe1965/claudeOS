@@ -76,10 +76,11 @@ def update_namespace(slug: str):
     if not ns:
         return jsonify({"error": "Namespace not found"}), 404
     updates = request.get_json(silent=True) or {}
-    from vault.schemas import validate_brand_fields, validate_brand_metadata
-    meta = updates.get("metadata") if isinstance(updates.get("metadata"), dict) else {}
-    err = (validate_brand_fields(updates.get("color"), updates.get("icon"), meta.get("accent_color"))
-           or validate_brand_metadata(meta))
+    from vault.schemas import validate_brand_fields
+    meta = updates.get("metadata", {})
+    if not isinstance(meta, dict):
+        return jsonify({"error": "metadata must be an object"}), 422
+    err = validate_brand_fields(updates.get("color"), updates.get("icon"), metadata=meta)
     if err:
         return jsonify({"error": err}), 422
     updated = _update(ns.id, updates)

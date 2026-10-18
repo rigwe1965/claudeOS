@@ -1,6 +1,8 @@
 """Admin API tests — user management, API keys, audit log, backup."""
 from __future__ import annotations
 
+import json
+
 import pytest
 
 
@@ -105,15 +107,62 @@ def test_unlock_user(client, admin_headers):
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
 
-def test_create_api_key(client, admin_headers):
+@pytest.mark.parametrize("policy", [{}, {"permissions": None}, {"permissions": []},
+                                  {"permissions": ["read"]}, {"permissions": ["write"]},
+                                  {"permissions": ["read", "write"]}])
+def test_create_api_key(client, admin_headers, policy):
+    from core.database import get_db
+
+    expected = policy.get("permissions")
+    if expected is None:
+        expected = ["read", "write"]
     resp = client.post(
         "/api/v1/admin/api-keys",
-        json={"name": "test-key", "namespace": "global", "permissions": ["read", "write"]},
+        json={"name": "test-key", "namespace": "global", **policy},
         headers=admin_headers,
     )
     assert resp.status_code == 201
     assert "raw_key" in resp.json
     assert resp.json["raw_key"].startswith("cos-")
+    assert resp.json["permissions"] == expected
+    with get_db() as conn:
+        stored = conn.execute("SELECT permissions FROM api_keys WHERE id = ?", (resp.json["id"],)).fetchone()
+    assert json.loads(stored["permissions"]) == expected
+
+    key_headers = {"X-API-Key": resp.json["raw_key"]}
+    assert client.get("/api/v1/admin/api-keys", headers=key_headers).status_code == 200
+    write = client.post("/api/v1/admin/api-keys", headers=key_headers, json={"name": "holder-key"})
+    assert write.status_code == (201 if "write" in expected else 403)
+    with get_db() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0] == (2 if "write" in expected else 1)
+
+
+@pytest.mark.parametrize("permissions", ["write", "", {}, {"write": True}, False, 0,
+                                         ["admin"], [None], ["read", {}]])
+def test_create_api_key_rejects_invalid_permissions(client, admin_headers, permissions):
+    from core.api.auth import create_api_key
+    from core.database import get_db
+
+    response = client.post("/api/v1/admin/api-keys", headers=admin_headers,
+                           json={"name": "invalid-key", "permissions": permissions})
+    assert response.status_code == 422
+    assert "raw_key" not in response.json
+    with pytest.raises(ValueError, match="permissions"):
+        create_api_key("invalid-helper-key", permissions=permissions)
+    with get_db() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0] == 0
+
+
+def test_create_api_key_helper_defaults(fresh_db):
+    from core.api.auth import create_api_key
+    from core.database import get_db
+
+    create_api_key("omitted")
+    create_api_key("none", permissions=None)
+    with get_db() as conn:
+        rows = conn.execute("SELECT permissions FROM api_keys").fetchall()
+    assert len(rows) == 2
+    assert all(json.loads(row["permissions"]) == ["read", "write"] for row in rows)
 
 
 def test_list_api_keys(client, admin_headers):

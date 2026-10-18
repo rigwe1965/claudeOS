@@ -66,7 +66,8 @@ def login():
     clear_failed_attempts(user["id"])
     audit_log("login_success", user_id=user["id"], username=username, ip=_ip(), ua=_ua(), namespace=user.get("namespace"))
 
-    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"))
+    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"),
+                                       token_generation=user["token_generation"])
     raw_refresh, refresh_hash = create_refresh_token()
     store_refresh_token(user["id"], refresh_hash, ip=_ip(), ua=_ua())
 
@@ -151,7 +152,8 @@ def refresh():
     if not user or not user["is_active"]:
         return jsonify({"error": "User not found or disabled"}), 401
 
-    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"))
+    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"),
+                                       token_generation=session["token_generation"])
     audit_log("token_refresh", user_id=user["id"], username=user["username"], ip=_ip(), ua=_ua())
 
     return jsonify({"access_token": access_token, "expires_in": 3600})
@@ -213,6 +215,9 @@ def change_password():
     if not user or not verify_password(current_pw, user["password_hash"]):
         return jsonify({"error": "Current password incorrect"}), 401
 
+    if user["must_change_password"] and new_pw == current_pw:
+        return jsonify({"error": "New password must be different from current password"}), 422
+
     err = validate_password_strength(new_pw, user["username"])
     if err:
         return jsonify({"error": err}), 422
@@ -224,8 +229,9 @@ def change_password():
             (new_hash, user["id"]),
         )
     # Kill every other session/token, then hand this caller a fresh pair
-    revoke_user_access(user["id"])
-    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"))
+    generation = revoke_user_access(user["id"])
+    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"),
+                                       token_generation=generation)
     raw_refresh, refresh_hash = create_refresh_token()
     store_refresh_token(user["id"], refresh_hash, ip=_ip(), ua=_ua())
 
@@ -258,11 +264,10 @@ def forgot_password():
     expires = (utcnow() + datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
 
     with get_db() as conn:
-        # Reuse user_sessions table with a special user_agent marker
         conn.execute(
-            "INSERT INTO user_sessions(id, user_id, token_hash, user_agent, ip_address, expires_at) "
-            "VALUES (?,?,?,'password_reset',?,?)",
-            (new_id(), user["id"], token_hash, _ip(), expires),
+            "INSERT INTO user_sessions(id, user_id, token_hash, user_agent, ip_address, expires_at, token_purpose) "
+            "VALUES (?,?,?,?,?,?,'password_reset')",
+            (new_id(), user["id"], token_hash, _ua(), _ip(), expires),
         )
 
     audit_log("password_reset_request", user_id=user["id"], username=username, ip=_ip(), ua=_ua())
@@ -291,7 +296,7 @@ def reset_password():
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     with get_db() as conn:
         session = conn.execute(
-            "SELECT * FROM user_sessions WHERE token_hash=? AND user_agent='password_reset' "
+            "SELECT * FROM user_sessions WHERE token_hash=? AND token_purpose='password_reset' "
             "AND revoked=0 AND expires_at > datetime('now')",
             (token_hash,),
         ).fetchone()
@@ -351,41 +356,53 @@ def create_dashboard_session():
     with get_db() as conn:
         # Purge expired sessions (housekeeping)
         conn.execute("DELETE FROM dashboard_sessions WHERE expires_at < datetime('now')")
-        conn.execute(
+        inserted = conn.execute(
             "INSERT INTO dashboard_sessions "
-            "(session_key, user_id, username, user_role, user_namespace, must_change_password, access_token, refresh_token, expires_at, session_id) "
-            "VALUES (?, ?, ?, ?, ?, 0, '', '', ?, ?)",
-            (_session_key_hash(key), _g.user_id, _g.username, _g.user_role, _g.user_namespace, expires_at, session["id"]),
+            "(session_key, user_id, username, user_role, user_namespace, must_change_password, access_token, refresh_token, expires_at, auth_session_id) "
+            "SELECT ?, ?, ?, ?, ?, 0, '', '', ?, id FROM user_sessions "
+            "WHERE id = ? AND user_id = ? AND revoked = 0 AND token_purpose = 'refresh' "
+            "AND julianday(expires_at) > julianday('now')",
+            (_session_key_hash(key), _g.user_id, _g.username, _g.user_role, _g.user_namespace,
+             expires_at, session["id"], _g.user_id),
         )
+        # Revocation may have happened after validate_refresh_token returned.
+        if not inserted.rowcount:
+            return jsonify({"error": "Invalid refresh token"}), 401
     return jsonify({"session_key": key})
 
 
 @auth_bp.get("/session/<key>")
 @limiter.limit("20 per minute")
 def restore_dashboard_session(key):
-    """Exchange a session handle for freshly minted tokens (current role/namespace, user must be active).
-
-    The refresh session the handle was issued from must still be valid, so revoking it kills the handle.
-    """
+    """Rotate credentials within the handle's live authentication session."""
     with get_db() as conn:
+        # Serialize restoration with revocation and other restorations. Do not
+        # open nested get_db contexts here: they would commit this transaction.
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
-            "SELECT d.* FROM dashboard_sessions d JOIN user_sessions s ON s.id = d.session_id "
-            "WHERE d.session_key = ? AND d.expires_at > datetime('now') "
-            "AND s.revoked = 0 AND s.expires_at > CURRENT_TIMESTAMP",
+            "SELECT d.session_key, d.auth_session_id, u.* FROM dashboard_sessions d "
+            "JOIN user_sessions s ON s.id = d.auth_session_id AND s.user_id = d.user_id "
+            "JOIN users u ON u.id = s.user_id "
+            "WHERE d.session_key = ? AND julianday(d.expires_at) > julianday('now') "
+            "AND s.revoked = 0 AND s.token_purpose = 'refresh' "
+            "AND julianday(s.expires_at) > julianday('now')",
             (_session_key_hash(key),),
         ).fetchone()
-    if not row:
-        return jsonify({"error": "session not found or expired"}), 404
+        user = dict(row) if row else None
+        if not user or not user["is_active"] or check_lockout(user) is not None:
+            conn.execute("DELETE FROM dashboard_sessions WHERE session_key = ?", (_session_key_hash(key),))
+            return jsonify({"error": "session not found or expired"}), 404
 
-    user = get_user_by_id(row["user_id"])
-    if not user or not user["is_active"] or check_lockout(user) is not None:
-        with get_db() as conn:
-            conn.execute("DELETE FROM dashboard_sessions WHERE session_key = ?", (row["session_key"],))
-        return jsonify({"error": "session not found or expired"}), 404
+        raw_refresh, refresh_hash = create_refresh_token()
+        # Keep the original id and expiry so restored credentials cannot escape
+        # administrative revocation or extend the authentication session.
+        conn.execute(
+            "UPDATE user_sessions SET token_hash = ?, last_used_at = CURRENT_TIMESTAMP "
+            "WHERE id = ?", (refresh_hash, row["auth_session_id"]),
+        )
 
-    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"))
-    raw_refresh, refresh_hash = create_refresh_token()
-    store_refresh_token(user["id"], refresh_hash, ip=_ip(), ua=_ua())
+    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"),
+                                       token_generation=user["token_generation"])
     return jsonify({
         "access_token":         access_token,
         "refresh_token":        raw_refresh,

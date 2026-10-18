@@ -7,7 +7,7 @@ from memory.schemas import (
     MemoryEntryUpdate,
     MemorySearchRequest,
 )
-from core.auth import require_auth, require_role, require_write, effective_namespace, can_access_namespace, is_scoped
+from core.auth import require_auth, require_role, effective_namespace, can_access_namespace, is_scoped
 from core.utils import utcnow_str
 
 _MEMORY_ROLES = ("admin", "operator", "client", "viewer")  # staff is tickets-only; unknown roles fail closed
@@ -40,7 +40,8 @@ def _entry_dict(e) -> dict:
 
 
 @memory_bp.get("")
-@require_memory_access
+@require_auth
+@require_role("admin", "operator", "client", "viewer")
 def list_memory():
     namespace = effective_namespace(request.args.get("namespace"))
     category = request.args.get("category")
@@ -70,8 +71,8 @@ def list_memory():
 
 
 @memory_bp.post("")
-@require_memory_access
-@require_write
+@require_auth
+@require_role("admin", "operator", "client")
 def write_memory():
     data = request.get_json(silent=True)
     if not data:
@@ -108,8 +109,8 @@ def write_memory():
 
 
 @memory_bp.delete("/bulk")
-@require_memory_access
-@require_write
+@require_auth
+@require_role("admin", "operator", "client")
 def bulk_delete_memory():
     ids = (request.get_json(silent=True) or {}).get("ids") or []
     if not isinstance(ids, list) or not ids:
@@ -163,7 +164,8 @@ def bulk_delete_memory():
 
 
 @memory_bp.get("/<entry_id>")
-@require_memory_access
+@require_auth
+@require_role("admin", "operator", "client", "viewer")
 def get_memory(entry_id: str):
     entry = engine.get_by_id(entry_id)
     if not entry:
@@ -174,8 +176,8 @@ def get_memory(entry_id: str):
 
 
 @memory_bp.put("/<entry_id>")
-@require_memory_access
-@require_write
+@require_auth
+@require_role("admin", "operator", "client")
 def update_memory(entry_id: str):
     data = request.get_json(silent=True)
     if not data:
@@ -199,8 +201,8 @@ def update_memory(entry_id: str):
 
 
 @memory_bp.delete("/<entry_id>")
-@require_memory_access
-@require_write
+@require_auth
+@require_role("admin", "operator", "client")
 def delete_memory(entry_id: str):
     entry = engine.get_by_id(entry_id)
     if not entry:
@@ -214,7 +216,8 @@ def delete_memory(entry_id: str):
 
 
 @memory_bp.post("/search")
-@require_memory_access
+@require_auth
+@require_role("admin", "operator", "client", "viewer")
 def search_memory():
     data = request.get_json(silent=True)
     if not data:
@@ -266,7 +269,8 @@ def import_memory():
 
 
 @memory_bp.get("/namespaces")
-@require_memory_access
+@require_auth
+@require_role("admin", "operator", "client", "viewer")
 def list_namespaces():
     counts = engine.namespace_counts()
     if is_scoped():
@@ -284,7 +288,8 @@ def expire_memory():
 
 
 @memory_bp.get("/context/<namespace>")
-@require_memory_access
+@require_auth
+@require_role("admin", "operator", "client", "viewer")
 def agent_context(namespace: str):
     min_confidence = float(request.args.get("min_confidence", 0.8))
     if not can_access_namespace(namespace):
@@ -308,7 +313,8 @@ def consolidate_memory():
 
 
 @memory_bp.get("/hybrid-search")
-@require_memory_access
+@require_auth
+@require_role("admin", "operator", "client", "viewer")
 def hybrid_search():
     """Hybrid BM25+vector search with RRF — Phase 11.2."""
     query = request.args.get("q", "").strip()

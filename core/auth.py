@@ -14,7 +14,7 @@ from typing import Optional
 
 import bcrypt
 import jwt
-from flask import g, jsonify, request
+from flask import abort, g, jsonify, request
 
 from core.database import get_db
 from core.utils import new_id, utcnow
@@ -110,7 +110,15 @@ def _secret() -> str:
     return get_settings().CLAUDEOS_SECRET_KEY
 
 
-def create_access_token(user_id: str, username: str, role: str, namespace: Optional[str]) -> str:
+def create_access_token(user_id: str, username: str, role: str, namespace: Optional[str],
+                        *, token_generation: Optional[int] = None) -> str:
+    # Credential-based issuers pass the generation captured during validation;
+    # re-reading it later could upgrade credentials revoked before signing.
+    if token_generation is None:
+        user = get_user_by_id(user_id)
+        if not user:
+            raise jwt.InvalidTokenError("User not found")
+        token_generation = user["token_generation"]
     ttl_minutes = _cfg_int("access_token_minutes", 60)
     now = utcnow()
     payload = {
@@ -118,6 +126,7 @@ def create_access_token(user_id: str, username: str, role: str, namespace: Optio
         "username": username,
         "role": role,
         "namespace": namespace,
+        "token_generation": token_generation,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=ttl_minutes)).timestamp()),
         "type": "access",
@@ -158,7 +167,8 @@ def store_refresh_token(user_id: str, token_hash: str, ip: str = "", ua: str = "
     expires_at = (utcnow() + timedelta(days=ttl_days)).isoformat()
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO user_sessions(id, user_id, token_hash, ip_address, user_agent, expires_at) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO user_sessions(id, user_id, token_hash, ip_address, user_agent, expires_at, token_purpose) "
+            "VALUES (?,?,?,?,?,?,'refresh')",
             (session_id, user_id, token_hash, ip, ua, expires_at),
         )
     return session_id
@@ -168,8 +178,11 @@ def validate_refresh_token(raw_token: str) -> Optional[dict]:
     """Returns the session row if valid, None otherwise."""
     token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
     with get_db() as conn:
+        # Normalize stored ISO timestamps and SQLite's clock before comparing.
         row = conn.execute(
-            "SELECT * FROM user_sessions WHERE token_hash = ? AND revoked = 0 AND datetime(expires_at) > datetime('now') AND user_agent != 'password_reset'",
+            "SELECT s.*, u.token_generation FROM user_sessions s JOIN users u ON u.id = s.user_id "
+            "WHERE s.token_hash = ? AND s.revoked = 0 "
+            "AND julianday(s.expires_at) > julianday('now') AND s.token_purpose = 'refresh'",
             (token_hash,),
         ).fetchone()
         if row:
@@ -394,22 +407,24 @@ _JWT_CACHE_TTL = 60.0
 
 
 def _cached_decode_access_token(token: str) -> dict:
-    """Decode and verify JWT, caching valid results for 60s to avoid repeated HMAC verification."""
+    """Decode and verify JWT, caching for at most 60s and never beyond exp."""
     tok_hash = hashlib.sha256(token.encode()).hexdigest()
     now = time.monotonic()
     with _jwt_cache_lock:
         entry = _jwt_cache.get(tok_hash)
-        if entry and now < entry[1]:
-            return entry[0]
+        if entry:
+            if "exp" in entry[0] and int(entry[0]["exp"]) <= time.time():
+                _jwt_cache.pop(tok_hash, None)
+                raise jwt.ExpiredSignatureError("Signature has expired")
+            if now < entry[1]:
+                return entry[0]
+            _jwt_cache.pop(tok_hash, None)
     payload = decode_access_token(token)  # raises on invalid/expired
-    # Never retain claims past the token's own expiry
     ttl = _JWT_CACHE_TTL
-    try:
-        ttl = min(ttl, float(payload["exp"]) - time.time())
-    except (KeyError, TypeError, ValueError):
-        ttl = 0.0
-    if ttl <= 0:
-        return payload
+    if "exp" in payload:
+        ttl = min(ttl, int(payload["exp"]) - time.time())
+        if ttl <= 0:
+            raise jwt.ExpiredSignatureError("Signature has expired")
     with _jwt_cache_lock:
         _jwt_cache[tok_hash] = (payload, now + ttl)
         if len(_jwt_cache) > _JWT_CACHE_MAX:
@@ -419,47 +434,27 @@ def _cached_decode_access_token(token: str) -> dict:
     return payload
 
 
-_user_state_cache: dict[str, tuple[Optional[dict], float]] = {}
-_USER_STATE_TTL = 5.0
-
-# Endpoints a user with must_change_password may still call (change it, or end the session).
-_PASSWORD_CHANGE_ENDPOINTS = frozenset({
-    "auth.change_password", "auth.logout", "auth.me", "auth.create_dashboard_session",
-})
-
-
 def _user_state(user_id: str) -> Optional[dict]:
-    """Authoritative role/namespace/active/revocation state for a JWT subject (5s cache)."""
-    now = time.monotonic()
-    with _jwt_cache_lock:
-        entry = _user_state_cache.get(user_id)
-        if entry and now < entry[1]:
-            return entry[0]
+    """Read current account state on every request, including across workers."""
     with get_db() as conn:
         row = conn.execute(
-            "SELECT role, namespace, is_active, tokens_valid_after, must_change_password FROM users WHERE id = ?", (user_id,)
+            "SELECT role, namespace, is_active, tokens_valid_after, must_change_password, "
+            "token_generation FROM users WHERE id = ?", (user_id,)
         ).fetchone()
-    state = dict(row) if row else None
-    with _jwt_cache_lock:
-        _user_state_cache[user_id] = (state, now + _USER_STATE_TTL)
-        if len(_user_state_cache) > _JWT_CACHE_MAX:
-            _user_state_cache.clear()
-    return state
+    return dict(row) if row else None
 
 
-def revoke_user_access(user_id: str) -> None:
-    """Invalidate every access token, refresh session and dashboard handle for a user."""
+def revoke_user_access(user_id: str) -> Optional[int]:
+    """Revoke all credentials atomically; return the new generation if the user exists."""
     with get_db() as conn:
-        conn.execute("UPDATE users SET tokens_valid_after = ? WHERE id = ?", (int(utcnow().timestamp()), user_id))
+        conn.execute(
+            "UPDATE users SET tokens_valid_after = ?, token_generation = token_generation + 1 WHERE id = ?",
+            (int(utcnow().timestamp()), user_id),
+        )
         conn.execute("UPDATE user_sessions SET revoked = 1 WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM dashboard_sessions WHERE user_id = ?", (user_id,))
-    with _jwt_cache_lock:
-        _user_state_cache.pop(user_id, None)
-
-
-def invalidate_user_state(user_id: str) -> None:
-    with _jwt_cache_lock:
-        _user_state_cache.pop(user_id, None)
+        row = conn.execute("SELECT token_generation FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row["token_generation"] if row else None
 
 
 def require_auth(f):
@@ -474,8 +469,14 @@ def require_auth(f):
                 payload = _cached_decode_access_token(token)
                 state = _user_state(payload["sub"])
                 if (not state or not state["is_active"]
+                        or type(payload.get("token_generation")) is not int
+                        or payload["token_generation"] != state["token_generation"]
                         or payload.get("iat", 0) < state["tokens_valid_after"]):
                     return jsonify({"error": "Invalid token"}), 401
+                # Check server state for every token issuer, including existing sessions.
+                if state["must_change_password"] and request.endpoint not in {
+                        "auth.change_password", "auth.logout"}:
+                    return jsonify({"error": "Password change required", "must_change_password": True}), 403
                 g.user_id        = payload["sub"]
                 g.username       = payload["username"]
                 # Role/namespace come from the DB, not the (possibly stale) token claims
@@ -518,12 +519,13 @@ def require_role(*allowed_roles: str):
 
 
 def require_write(f):
-    """403 for read-only roles (viewer) and read-only API keys, whatever the HTTP method.
-    Must be used after @require_auth."""
+    """403 for read-only accounts or API keys. Must be used after @require_auth."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if getattr(g, "user_role", None) == "viewer" or getattr(g, "api_read_only", False):
             return jsonify({"error": "Read-only account"}), 403
+        if getattr(g, "api_read_only", False):
+            return jsonify({"error": "API key is read-only"}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -535,17 +537,22 @@ def is_scoped() -> bool:
 
 def can_access_namespace(namespace: Optional[str]) -> bool:
     """True if the caller may touch data belonging to `namespace`."""
-    if not is_scoped():
+    role = getattr(g, "user_role", None)
+    if role in ("admin", "operator"):
         return True
-    return bool(namespace) and namespace == getattr(g, "user_namespace", None)
+    return role in ("client", "viewer") and bool(namespace) and namespace == getattr(g, "user_namespace", None)
 
 
 def effective_namespace(requested: Optional[str] = None) -> Optional[str]:
     """Return the namespace to query based on caller's role.
     Clients/viewers are always restricted to their own namespace — never trust caller value.
-    Improperly provisioned client/viewer accounts with no namespace return None (no data).
+    Unsupported roles and client/viewer accounts without a namespace are denied.
     """
-    role = getattr(g, "user_role", "admin")
+    role = getattr(g, "user_role", None)
+    if role in ("admin", "operator"):
+        return requested
     if role in ("client", "viewer"):
-        return getattr(g, "user_namespace", None)  # HI-04: removed `or requested` fallback
-    return requested
+        namespace = getattr(g, "user_namespace", None)
+        if namespace:
+            return namespace
+    abort(403)

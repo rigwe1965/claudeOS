@@ -205,6 +205,7 @@ def search_semantic(
     order_map = {mid: idx for idx, mid in enumerate(memory_ids)}
     placeholders = ",".join("?" * len(memory_ids))
     with get_db() as conn:
+        # Vector IDs are candidates; SQLite enforces the requested namespace.
         rows = conn.execute(
             f"""SELECT * FROM memory_entries
                 WHERE id IN ({placeholders})
