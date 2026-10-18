@@ -21,9 +21,9 @@ def audio_client(monkeypatch):
     monkeypatch.setattr(auth, "_secret", lambda: secret)
     monkeypatch.setattr(auth, "_user_state", lambda _: {
         "is_active": True, "tokens_valid_after": 0, "must_change_password": False,
-        "role": "operator", "namespace": None,
+        "role": "operator", "namespace": None, "token_generation": 0,
     })
-    token = jwt.encode({"sub": "audio-user", "username": "audio-user"}, secret,
+    token = jwt.encode({"sub": "audio-user", "username": "audio-user", "token_generation": 0}, secret,
                        algorithm="HS256")
     monkeypatch.setattr(auth, "_jwt_cache", {})
     monkeypatch.setitem(sys.modules, "whisper", SimpleNamespace(

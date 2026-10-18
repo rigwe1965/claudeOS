@@ -9,7 +9,7 @@ logger = logging.getLogger("claudeos.admin")
 
 from core.auth import (
     audit_log, clear_failed_attempts, create_access_token, create_user,
-    get_user_by_id, hash_password, invalidate_user_state, require_auth, require_role,
+    get_user_by_id, hash_password, require_auth, require_role,
     revoke_session, revoke_user_access, validate_password_strength, _cfg_cache,
 )
 from core.database import get_db
@@ -115,8 +115,6 @@ def update_user(user_id: str):
             conn.execute(f"UPDATE users SET {set_clauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", vals)
         if {"role", "namespace", "is_active"} & set(updates):
             revoke_user_access(user_id)
-        elif "must_change_password" in updates:
-            invalidate_user_state(user_id)
 
     audit_log("user_updated", user_id=g.user_id, username=g.username, detail={"target": user_id, "updates": list(updates.keys())})
     return jsonify(_user_dict_full(get_user_by_id(user_id)))

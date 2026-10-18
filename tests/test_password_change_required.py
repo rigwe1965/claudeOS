@@ -78,10 +78,8 @@ def test_admin_password_requirement_applies_to_cached_and_restored_tokens(
     assert session.status_code == 200
     assert client.get("/api/v1/outputs", headers=headers).status_code == 200
 
-    # Hold the cache clock fixed so this verifies invalidation without a TTL wait.
+    # Hold the cache clock fixed so state changes are checked on JWT cache hits.
     monkeypatch.setattr("core.auth.time.monotonic", lambda: 100.0)
-    from core.auth import invalidate_user_state
-    invalidate_user_state(user["id"])
     assert client.get("/api/v1/outputs", headers=headers).status_code == 200
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
     patched = client.patch(f"/api/v1/admin/users/{user['id']}", headers=admin_headers,
