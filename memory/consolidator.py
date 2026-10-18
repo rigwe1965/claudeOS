@@ -75,6 +75,8 @@ def _consolidate_namespace(namespace: str, dry_run: bool) -> dict:
         rows = conn.execute(
             """SELECT id, category, key, value, confidence FROM memory_entries
                WHERE namespace = ?
+                 -- Never turn legacy cross-namespace failure details into shared facts.
+                 AND NOT (namespace = 'global' AND key = 'error_log')
                  AND (is_consolidated IS NULL OR is_consolidated = 0)
                  AND (archived IS NULL OR archived = 0)
                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)

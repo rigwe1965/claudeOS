@@ -553,7 +553,7 @@ def _trigger_eval(run_id: str, prompt: str, output_text: str, context: str) -> N
 
 
 def _log_failure_to_memory(agent_name: str, namespace: str, error_msg: str, run_id: str) -> None:
-    """Append agent failure to global error_log memory entry for audit trail."""
+    """Append agent failure to its namespace's error_log audit trail."""
     try:
         from core.utils import new_id, utcnow_str
         from core.database import get_db
@@ -561,7 +561,8 @@ def _log_failure_to_memory(agent_name: str, namespace: str, error_msg: str, run_
         entry = f"[{ts}] {agent_name} (ns={namespace}, run={run_id[:8]}): {error_msg[:200]}"
         with get_db() as conn:
             row = conn.execute(
-                "SELECT id, value FROM memory_entries WHERE key='error_log' AND namespace='global' AND archived=0"
+                "SELECT id, value FROM memory_entries WHERE key='error_log' AND namespace=? AND archived=0",
+                (namespace,),
             ).fetchone()
             if row:
                 combined = row["value"] + f"\n{entry}"
@@ -578,7 +579,7 @@ def _log_failure_to_memory(agent_name: str, namespace: str, error_msg: str, run_
             else:
                 conn.execute(
                     "INSERT INTO memory_entries (id, namespace, category, key, value, confidence, tags, archived, is_consolidated) VALUES (?,?,?,?,?,?,?,0,0)",
-                    (new_id(), "global", "context", "error_log", entry, 0.9, "errors,audit"),
+                    (new_id(), namespace, "context", "error_log", entry, 0.9, "errors,audit"),
                 )
     except Exception as ex:
         logger.debug("Failed to log failure to memory: %s", ex)
