@@ -20,7 +20,7 @@ def audio_client(monkeypatch):
     secret = "transcribe-test-secret-32-characters!"
     monkeypatch.setattr(auth, "_secret", lambda: secret)
     monkeypatch.setattr(auth, "_user_state", lambda _: {
-        "is_active": True, "tokens_valid_after": 0,
+        "is_active": True, "tokens_valid_after": 0, "must_change_password": False,
         "role": "operator", "namespace": None,
     })
     token = jwt.encode({"sub": "audio-user", "username": "audio-user"}, secret,
