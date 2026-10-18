@@ -353,9 +353,9 @@ def create_dashboard_session():
         conn.execute("DELETE FROM dashboard_sessions WHERE expires_at < datetime('now')")
         conn.execute(
             "INSERT INTO dashboard_sessions "
-            "(session_key, user_id, username, user_role, user_namespace, must_change_password, access_token, refresh_token, expires_at) "
-            "VALUES (?, ?, ?, ?, ?, 0, '', '', ?)",
-            (_session_key_hash(key), _g.user_id, _g.username, _g.user_role, _g.user_namespace, expires_at),
+            "(session_key, user_id, username, user_role, user_namespace, must_change_password, access_token, refresh_token, expires_at, session_id) "
+            "VALUES (?, ?, ?, ?, ?, 0, '', '', ?, ?)",
+            (_session_key_hash(key), _g.user_id, _g.username, _g.user_role, _g.user_namespace, expires_at, session["id"]),
         )
     return jsonify({"session_key": key})
 
@@ -363,10 +363,15 @@ def create_dashboard_session():
 @auth_bp.get("/session/<key>")
 @limiter.limit("20 per minute")
 def restore_dashboard_session(key):
-    """Exchange a session handle for freshly minted tokens (current role/namespace, user must be active)."""
+    """Exchange a session handle for freshly minted tokens (current role/namespace, user must be active).
+
+    The refresh session the handle was issued from must still be valid, so revoking it kills the handle.
+    """
     with get_db() as conn:
         row = conn.execute(
-            "SELECT * FROM dashboard_sessions WHERE session_key = ? AND expires_at > datetime('now')",
+            "SELECT d.* FROM dashboard_sessions d JOIN user_sessions s ON s.id = d.session_id "
+            "WHERE d.session_key = ? AND d.expires_at > datetime('now') "
+            "AND s.revoked = 0 AND s.expires_at > CURRENT_TIMESTAMP",
             (_session_key_hash(key),),
         ).fetchone()
     if not row:
