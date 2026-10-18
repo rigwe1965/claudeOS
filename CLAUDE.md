@@ -41,7 +41,7 @@ Start: `.\scripts\start.ps1` (Flask + Streamlit, uses `.venv`), `.\scripts\start
 - Access token 60 min; refresh token stored as SHA-256 hash, never logged or returned after issue. Intended session window 24 h — DB default is currently 7 days (audit L-3).
 - Passwords: bcrypt 12 rounds, min 10 chars, upper+lower+digit. 5 failed logins → 15-min lock (system_config). `must_change_password` forces change. Username lookup is `LOWER()`.
 - Client one-per-namespace (app layer). `effective_namespace()` enforces client scoping — never trust a client-supplied namespace (falls back to `requested` if `g.user_namespace` is null).
-- Password-reset tokens (`user_agent='password_reset'`) are excluded from `validate_refresh_token`.
+- Credential purpose is server-controlled (`token_purpose`); password-reset tokens are excluded from `validate_refresh_token`. User-Agent is metadata only.
 - Vault paths: `_validate_filename()` + `Path.resolve()` comparison. Soft-delete via `deleted_at` on `agent_runs` and `outputs` (list/search/stats filter it; `include_deleted=True` on `dispatcher.list_runs`).
 - Responses: CORS from `ALLOWED_ORIGINS` (never `*`), X-Content-Type-Options / X-Frame-Options / X-XSS-Protection, CSP `default-src 'none'; frame-ancestors 'none'`, HSTS in production. Rate limits (flask-limiter, SQLite storage): agent /run 30/min, /stream 20/min, workflow /trigger 10/min, /run 20/min.
 - Self-registration returns one generic error for missing vs wrong-type namespaces. Webhooks: 64KB body cap + context dict validation. Memory writes >64KB → 422. Bulk deletes capped at 200. Audit `?since=`/`?until=` validated as ISO. Admin PATCH user fields come from `_ALLOWED_USER_UPDATES` whitelist only.

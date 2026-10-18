@@ -258,11 +258,10 @@ def forgot_password():
     expires = (utcnow() + datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
 
     with get_db() as conn:
-        # Reuse user_sessions table with a special user_agent marker
         conn.execute(
-            "INSERT INTO user_sessions(id, user_id, token_hash, user_agent, ip_address, expires_at) "
-            "VALUES (?,?,?,'password_reset',?,?)",
-            (new_id(), user["id"], token_hash, _ip(), expires),
+            "INSERT INTO user_sessions(id, user_id, token_hash, user_agent, ip_address, expires_at, token_purpose) "
+            "VALUES (?,?,?,?,?,?,'password_reset')",
+            (new_id(), user["id"], token_hash, _ua(), _ip(), expires),
         )
 
     audit_log("password_reset_request", user_id=user["id"], username=username, ip=_ip(), ua=_ua())
@@ -291,7 +290,7 @@ def reset_password():
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     with get_db() as conn:
         session = conn.execute(
-            "SELECT * FROM user_sessions WHERE token_hash=? AND user_agent='password_reset' "
+            "SELECT * FROM user_sessions WHERE token_hash=? AND token_purpose='password_reset' "
             "AND revoked=0 AND expires_at > datetime('now')",
             (token_hash,),
         ).fetchone()
