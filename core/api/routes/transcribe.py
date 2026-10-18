@@ -7,6 +7,11 @@ from core.auth import require_auth
 
 transcribe_bp = Blueprint("transcribe", __name__, url_prefix="/api/v1")
 
+# Header-declared values are untrusted: bound them before any resampling allocation.
+_MIN_SAMPLE_RATE = 8_000
+_MAX_SAMPLE_RATE = 192_000
+_MAX_AUDIO_SECONDS = 600
+
 
 @transcribe_bp.route("/transcribe", methods=["POST"])
 @require_auth
@@ -24,6 +29,11 @@ def transcribe_audio():
         from scipy.io import wavfile
 
         sample_rate, data = wavfile.read(io.BytesIO(audio_bytes))
+
+        if not _MIN_SAMPLE_RATE <= sample_rate <= _MAX_SAMPLE_RATE:
+            return jsonify({"error": "Unsupported sample rate"}), 400
+        if len(data) / sample_rate > _MAX_AUDIO_SECONDS:
+            return jsonify({"error": "Audio too long"}), 400
 
         # Convert to float32 mono
         if data.ndim > 1:
