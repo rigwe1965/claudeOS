@@ -128,7 +128,8 @@ def list_outputs(
             conditions.append("tags LIKE ?")
             params.append(f'%"{tag}"%')
     where = "WHERE " + " AND ".join(conditions)
-    params += [limit, offset]
+    # SQLite treats a negative LIMIT as "no limit": clamp to a bounded positive range
+    params += [max(1, min(limit, 200)), max(0, offset)]
     with get_db() as conn:
         rows = conn.execute(
             f"""SELECT id, namespace, project_id, agent_run_id, workflow_run_id,
@@ -155,7 +156,7 @@ def search(query: str, namespace: Optional[str] = None, limit: int = 20) -> list
     params: list = [safe_query]
     if namespace:
         params.append(namespace)
-    params.append(limit)
+    params.append(max(1, min(limit, 100)))  # negative LIMIT = unlimited in SQLite
 
     try:
         with get_db() as conn:

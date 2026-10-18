@@ -32,7 +32,7 @@ def list_outputs():
 @require_write
 def save_output():
     from outputs.manager import save
-    from outputs.schemas import OutputSave
+    from outputs.schemas import OutputSave, OUTPUT_TYPES
     body = request.get_json(silent=True) or {}
     if is_scoped():
         body["namespace"] = effective_namespace(body.get("namespace"))
@@ -40,6 +40,8 @@ def save_output():
         data = OutputSave(**body)
     except Exception as e:
         return jsonify({"error": str(e)}), 422
+    if data.output_type not in OUTPUT_TYPES:
+        return jsonify({"error": f"output_type must be one of: {', '.join(OUTPUT_TYPES)}"}), 422
     out = save(
         namespace=data.namespace,
         title=data.title,

@@ -12,11 +12,17 @@ from flask import Blueprint, jsonify, request
 
 from flask import g
 from core.auth import require_auth, require_role, effective_namespace, is_scoped
-require_api_key = require_auth  # alias
 from core.utils import utcnow_str
 from core.api.limiter import limiter
 
 workflows_bp = Blueprint("workflows", __name__, url_prefix="/api/v1/workflows")
+
+_WORKFLOW_ROLES = ("admin", "operator", "client", "viewer")  # staff is tickets-only; unknown roles fail closed
+
+
+def require_api_key(f):
+    """Authenticate, then reject roles with no workflow access (webhook trigger doesn't use this)."""
+    return require_auth(require_role(*_WORKFLOW_ROLES)(f))
 
 
 @workflows_bp.get("")

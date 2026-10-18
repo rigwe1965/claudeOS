@@ -558,6 +558,11 @@ def _format_news_results(articles: list[dict]) -> str:
     return "\n".join(lines)
 
 
+_TAG_START_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)")
+_SKIP_OPEN = frozenset({"script", "style", "nav", "header", "footer", "noscript", "aside", "iframe", "svg"})
+_SKIP_CLOSE_RE = re.compile(r"</(?:script|style|nav|header|footer|noscript|aside|iframe|svg)\s*>", re.IGNORECASE)
+
+
 def _extract_text(html_content: str) -> str:
     """Strip HTML and return clean readable text."""
     ignored_tags = {"script", "style", "nav", "header", "footer", "noscript", "aside", "iframe", "svg"}

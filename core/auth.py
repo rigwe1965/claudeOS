@@ -153,8 +153,15 @@ def create_refresh_token() -> tuple[str, str]:
     return raw, hashed
 
 
+# user_sessions.user_agent value that marks a password-reset token. Only /auth/forgot-password
+# may write it; client-supplied User-Agent text must never carry it.
+RESET_TOKEN_MARKER = "password_reset"
+
+
 def store_refresh_token(user_id: str, token_hash: str, ip: str = "", ua: str = "") -> str:
     """Stores session row. Returns session id."""
+    if ua.strip().lower() == RESET_TOKEN_MARKER:
+        ua = "invalid"
     ttl_days = _cfg_int("refresh_token_days", 7)
     session_id = new_id()
     expires_at = (utcnow() + timedelta(days=ttl_days)).isoformat()
@@ -480,6 +487,8 @@ def require_auth(f):
                 # treated as "unscoped" by effective_namespace() consumers.
                 if g.user_role in ("client", "viewer") and not g.user_namespace:
                     return jsonify({"error": "Account has no namespace assigned"}), 403
+                if state["must_change_password"] and request.endpoint not in _PASSWORD_CHANGE_ENDPOINTS:
+                    return jsonify({"error": "Password change required", "must_change_password": True}), 403
                 return f(*args, **kwargs)
             except jwt.ExpiredSignatureError:
                 return jsonify({"error": "Token expired"}), 401
@@ -513,7 +522,7 @@ def require_write(f):
     """403 for read-only accounts or API keys. Must be used after @require_auth."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if getattr(g, "user_role", None) == "viewer":
+        if getattr(g, "user_role", None) == "viewer" or getattr(g, "api_read_only", False):
             return jsonify({"error": "Read-only account"}), 403
         if getattr(g, "api_read_only", False):
             return jsonify({"error": "API key is read-only"}), 403

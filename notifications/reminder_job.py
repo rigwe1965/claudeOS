@@ -10,6 +10,8 @@ import json
 import logging
 from datetime import datetime, timezone
 
+from core.api.middleware import _log_safe
+
 logger = logging.getLogger("claudeos.notifications.reminder_job")
 
 

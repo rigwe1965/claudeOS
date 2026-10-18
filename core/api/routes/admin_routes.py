@@ -300,7 +300,7 @@ def list_sessions():
             """SELECT s.id, s.user_id, u.username, s.ip_address, s.user_agent,
                       s.expires_at, s.created_at, s.last_used_at, s.revoked
                FROM user_sessions s JOIN users u ON s.user_id = u.id
-               WHERE s.revoked = 0 AND s.expires_at > CURRENT_TIMESTAMP
+               WHERE s.revoked = 0 AND datetime(s.expires_at) > datetime('now')
                ORDER BY s.created_at DESC"""
         ).fetchall()
     return jsonify([dict(r) for r in rows])

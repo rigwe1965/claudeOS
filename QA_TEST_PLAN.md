@@ -1,4 +1,5 @@
 # ClaudeOS — Manual QA Test Plan
+
 **Version:** 1.2 | **System:** Flask :5000 + Streamlit :8501
 **How to use:** Work top-to-bottom. Mark each item PASS / FAIL / SKIP. Fix all FAILs before client handover.
 
@@ -14,7 +15,7 @@
 **Wait ~10 seconds, then verify:**
 
 | Check | How | Expected |
-|-------|-----|----------|
+| ------- | ----- | ---------- |
 | Flask alive | Browser → `http://localhost:5000/api/v1/health` | `{"status":"ok"}` |
 | Streamlit alive | Browser → `http://localhost:8501` | Login page loads |
 | DB exists | File exists: `data/claudeos.db` | File present, non-zero size |
@@ -27,6 +28,7 @@
 ## SECTION 0 — AUTH (prerequisite for everything)
 
 ### 0.1 Login
+
 1. Open `http://localhost:8501`
 2. Enter username `admin` + correct password
 3. Click Login (or press Enter)
@@ -35,14 +37,17 @@
 **Fail signals:** "Invalid credentials", blank page, spinner that never resolves.
 
 ### 0.2 Token auto-refresh (background check)
+
 - Stay logged in for 60+ minutes → dashboard should NOT log you out
 - If it does log out: token refresh is broken (check `dashboard/app.py` auto-refresh logic)
 
 ### 0.3 Logout
+
 1. Click **Logout** button in sidebar
 2. **Expected:** Returns to login page, session cleared
 
 ### 0.4 Wrong password lockout
+
 1. Logout, then attempt login with wrong password 5 times
 2. **Expected:** Account locked message appears
 3. Login as admin → Admin → Users → Unlock the account
@@ -54,12 +59,16 @@
 **Navigate to:** Overview (first item in sidebar)
 
 ### 1.1 KPI Cards
+
 **Expected:** Six metric cards visible:
+
 - Memories | Agent Runs | Active Workflows | Projects | Outputs | Open Tickets
 - All show numbers (0 is acceptable, "—" or error is NOT)
 
 ### 1.2 System Status (admin-visible)
+
 **Expected:** Three status badges visible:
+
 - API Status → green "online"
 - Database → green "online"
 - ChromaDB → green "online" (or yellow "degraded" if chromadb not indexed yet)
@@ -67,9 +76,11 @@
 > If Database shows red: Flask can't reach SQLite → restart server
 
 ### 1.3 Memory Breakdown
+
 **Expected:** Per-namespace memory entry counts listed (may be 0 if no memories added yet)
 
 ### 1.4 Quick Dispatch (agent run from Overview)
+
 1. Select any agent from dropdown
 2. Select namespace `global`
 3. Type a short prompt: `say hello`
@@ -79,9 +90,11 @@
 **Fail signals:** "Stream error", "API unreachable", spinner forever.
 
 ### 1.5 Live Activity Feed
+
 **Expected:** After completing 1.4, the feed shows the new run with status badge.
 
 ### 1.6 Auto-refresh toggle
+
 1. Toggle on **Auto-refresh**
 2. Wait 8–10 seconds
 3. **Expected:** Page data refreshes without manual reload, no crash
@@ -93,6 +106,7 @@
 **Navigate to:** Agents
 
 ### 2.1 Catalog Tab
+
 1. Click **Catalog** tab
 2. **Expected:** Grid of agent cards, each showing name, category badge, model, description
 3. Try the search box — type `analysis`
@@ -101,6 +115,7 @@
 > If "No agents registered" appears: run `python scripts/seed_agents.py` then restart
 
 ### 2.2 Basic Chat (text only)
+
 1. Click **Chat** tab
 2. Select `analysis-agent` (or any enabled agent)
 3. Namespace: `global`
@@ -110,6 +125,7 @@
 **Expected:** Streaming response appears token-by-token, ends within 30s. Token count shown below response.
 
 ### 2.3 Image Upload (multimodal)
+
 1. In Chat tab, use **Attach** panel to upload any `.jpg` or `.png`
 2. Image thumbnail appears below uploader
 3. Type prompt: `Describe what you see in this image`
@@ -119,26 +135,31 @@
 **Fail signal:** "only text was received" → image pipeline broken (fixed in commit 291eece — verify server was restarted after that commit)
 
 ### 2.4 Multi-turn Conversation
+
 1. Send message: `My name is Test User`
 2. Send follow-up: `What is my name?`
 3. **Expected:** Agent recalls "Test User" from earlier in conversation
 
 ### 2.5 Clear Conversation
+
 1. Click **Clear conversation** button
 2. Send: `What is my name?`
 3. **Expected:** Agent does NOT recall "Test User" — fresh context
 4. **Expected:** Voice input widget also resets (microphone button returns to default state, no previous audio retained)
 
 ### 2.6 A2A Agent Card
+
 1. Expand **Agent Card (A2A)** section in left panel
 2. **Expected:** JSON block showing agent name, capabilities, endpoint URLs
 
 ### 2.7 Run History Tab
+
 1. Click **Run History** tab
 2. **Expected:** Table showing recent runs with columns: Agent, Namespace, Status, Quality, Tokens, Duration
 3. Runs from steps 2.2–2.4 should appear here
 
 ### 2.8 Voice Input (OPTIONAL — requires whisper)
+
 1. Click microphone button, speak a sentence, stop recording
 2. **Expected:** Text transcribed and placed in prompt field
 3. **If error:** "openai-whisper not installed" → acceptable, mark SKIP
@@ -150,6 +171,7 @@
 **Navigate to:** Memory
 
 ### 3.1 Add a Memory Entry
+
 1. Click **Add Entry** tab
 2. Fill in:
    - Namespace: `global`
@@ -162,12 +184,14 @@
 4. **Expected:** Success message, no error
 
 ### 3.2 Browse Entries
+
 1. Click **Browse** tab
 2. **Expected:** Table of memory entries, test_entry_001 visible
 3. Try the namespace filter — select `global`
 4. **Expected:** Filters to global entries only
 
 ### 3.3 Text Search
+
 1. Click **Search** tab
 2. Mode: `text`
 3. Namespace: `global`
@@ -175,6 +199,7 @@
 5. **Expected:** test_entry_001 appears in results
 
 ### 3.4 Semantic Search
+
 1. Same Search tab
 2. Mode: `semantic`
 3. Query: `manual testing`
@@ -182,11 +207,13 @@
 5. **Fail signal:** Error about ChromaDB → vector DB issue. Check `data/chromadb` folder exists.
 
 ### 3.5 Hybrid Search
+
 1. Mode: `both` (hybrid BM25+vector)
 2. Same query
 3. **Expected:** Combined results, no error
 
 ### 3.6 Delete Entry
+
 1. In Browse tab, find test_entry_001
 2. Delete it
 3. **Expected:** Entry removed from list after refresh
@@ -198,11 +225,13 @@
 **Navigate to:** Workflows
 
 ### 4.1 Workflows List
+
 1. **Workflows** tab
 2. **Expected:** List of workflows with trigger type (schedule/manual), enabled toggle, step count
 3. If empty: run `python scripts/seed_workflows.py` → restart
 
 ### 4.2 Manual Trigger a Workflow
+
 1. Find any workflow with trigger type `manual` or `schedule`
 2. Click **Run** / **Trigger** button
 3. Context input (optional): leave blank or enter `{"test": true}`
@@ -211,20 +240,24 @@
 **Expected:** Success toast or run record appears. No 500 error.
 
 ### 4.3 Workflow Run History
+
 1. Click **Run History** tab
 2. **Expected:** Table shows the run triggered in 4.2, with status `done` or `running`
 
 ### 4.4 Scheduler Tab
+
 1. Click **Scheduler** tab
 2. **Expected:** List of scheduled jobs with cron expression and next run time
 3. Click **Reload Scheduler**
 4. **Expected:** Success message, no crash
 
 ### 4.5 Webhooks Tab
+
 1. Click **Webhooks** tab
 2. Pick any workflow → click **Enable Webhook**
 3. **Expected:** Webhook URL and secret displayed
 4. Test via curl (in a new terminal):
+
 ```powershell
 # Replace <secret> and <workflow-name> with actual values
 $secret = "<your-webhook-secret>"
@@ -234,6 +267,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
   -Headers @{"X-Webhook-Secret" = $secret; "Content-Type" = "application/json"} `
   -Body $body
 ```
+
 **Expected:** HTTP 200 response, run record created
 
 ---
@@ -243,6 +277,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 **Navigate to:** Projects
 
 ### 5.1 Namespace List
+
 1. **Namespaces** tab
 2. **Expected:** Grid/list of namespaces with name, slug, type, project count
 3. Toggle **Show disabled** — disabled namespaces appear if any exist
@@ -250,21 +285,25 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 > If empty: run `python scripts/seed_namespaces.py`
 
 ### 5.2 Workspace Stats
+
 1. Click any namespace to expand / select it
 2. **Expected:** File counts per subdirectory (documents, outputs, context, etc.)
 
 ### 5.3 Projects Tab
+
 1. Click **Projects** tab
 2. Select a namespace from dropdown
 3. **Expected:** Project cards with name, status badge, priority, tech stack
 
 ### 5.4 Create a Project
+
 1. Click **New Project** (or equivalent button)
 2. Fill: Name=`QA Test Project`, Namespace=`global`, Status=`active`
 3. Save
 4. **Expected:** Project appears in list
 
 ### 5.5 Context Files
+
 1. Click **Context Files** tab
 2. Select namespace `global`
 3. Upload a small `.txt` file
@@ -279,26 +318,31 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 > Note: Outputs are auto-created when agents run with "Save output" checked. Ensure you ran at least one agent run with save enabled (Section 2.2).
 
 ### 6.1 Browse Outputs
+
 1. **Browse** tab
 2. **Expected:** Table of outputs with type icon, title, namespace, tags, size, date
 3. Bulk select checkbox works
 4. Delete a test output with 2-click confirmation
 
 ### 6.2 Search Outputs
+
 1. **Search** tab
 2. Query: agent name used in Section 2
 3. **Expected:** Matching outputs appear
 
 ### 6.3 Export an Output
+
 1. Browse tab → click any output
 2. Export as **Markdown**
 3. **Expected:** File download or rendered content, no 404/500
 
 ### 6.4 Stats Tab
+
 1. **Stats** tab
 2. **Expected:** Total count, per-namespace breakdown, per-type breakdown, no error
 
 ### 6.5 Agent Attribution on Saved Outputs
+
 1. Run `research-agent` with a prompt and **Save output** checked
 2. Run `analysis-agent` with a different prompt and **Save output** checked
 3. Navigate to Outputs → Browse
@@ -313,6 +357,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 **Navigate to:** Tickets
 
 ### 7.1 Create a Ticket
+
 1. Click **Create** tab
 2. Fill:
    - Title: `QA Test Ticket`
@@ -324,21 +369,25 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 4. **Expected:** Success, ticket appears in Browse tab
 
 ### 7.2 Browse Tickets
+
 1. **Browse** tab
 2. **Expected:** QA Test Ticket visible, with SLA due date, status=`open`
 3. Status filter works (filter by `open`)
 4. Priority filter works
 
 ### 7.3 Advance Ticket Status
+
 1. Click on QA Test Ticket
 2. Change status: `open` → `assigned` → `work_in_progress` → `completed`
 3. **Expected:** Each transition saves successfully
 
 ### 7.4 My Tickets Tab
+
 1. Click **My Tickets**
 2. **Expected:** QA Test Ticket appears (you are creator)
 
 ### 7.5 Bulk Delete
+
 1. Browse tab → select QA Test Ticket via checkbox
 2. Click **Delete Selected**
 3. Confirm
@@ -352,18 +401,22 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 *(Only visible to admin and operator roles)*
 
 ### 8.1 Quality Scores Tab
+
 1. **Expected:** Bar chart of per-agent quality averages (0–5 scale)
 2. Scores from agent runs in Section 2 should appear here
 3. Agents with 0 runs show 0 or are absent
 
 ### 8.2 Latency Tab
+
 1. **Expected:** Table showing p50/p95/p99 latency per agent
 2. Agents run in Section 2 should have values
 
 ### 8.3 Token Cost Tab
+
 1. **Expected:** Token usage breakdown per agent, cost estimate in USD
 
 ### 8.4 Memory Health Tab
+
 1. **Expected:**
    - Total memory entries count
    - Stale entries count
@@ -371,6 +424,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
    - Suggestion to run consolidation if stale entries > threshold
 
 ### 8.5 Namespace Usage Tab
+
 1. **Expected:** Tab visible (admin/operator only)
 2. Table showing per-namespace: runs count, input tokens, output tokens, estimated USD cost, avg quality score, memory entries
 3. Stacked bar chart (plotly) comparing token usage across namespaces
@@ -383,17 +437,20 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 **Navigate to:** Settings
 
 ### 9.1 Email / Notification Config
+
 1. **Expected:** SMTP fields visible (host, port, from, to)
 2. Values should match `.env` (smtp.gmail.com, port 587)
 3. Edit a field → Save → Reload page → value persists
 
 ### 9.2 Supabase Sync Status
+
 1. **Expected:** Status badge visible
 2. If Supabase is configured: click **Test Connection** → should return success or clear error
 3. Click **Manual Push** → status updates
 4. If Supabase not configured: badge shows "not configured" or "disabled" → mark SKIP
 
 ### 9.3 Sync Log — Single Entry Delete
+
 1. Scroll to **Sync Log** section (last 50 runs)
 2. Find any row in the Individual delete list
 3. Click the **🗑** button on that row
@@ -401,6 +458,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 5. **Fail signal:** 404 (entry ID missing) or 500 (delete query error)
 
 ### 9.4 Sync Log — Bulk Select & Delete
+
 1. In the Sync Log `st.data_editor`, tick the **✓** checkbox on 2–3 rows
 2. **Expected:** "Delete Selected (N)" button becomes enabled, label updates with count
 3. Click **Delete Selected (N)**
@@ -416,6 +474,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 *(Admin role required)*
 
 ### 10.1 Users Tab
+
 1. **Expected:** Table of all users with role, namespace, active status
 2. Admin user (yourself) visible
 3. Click **Create User**:
@@ -426,27 +485,33 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/workflows/<workflow-name>/t
 4. **Expected:** User appears in table
 
 ### 10.2 API Keys Tab
+
 1. Click **Create API Key**
 2. Name: `QA Test Key`, Permissions: `read`, Namespace: `global`
 3. **Expected:** Key created, token displayed (copy it — shown only once)
 4. Test the key:
-```powershell
-Invoke-WebRequest -Uri "http://localhost:5000/api/v1/health" `
-  -Headers @{"X-API-Key" = "<your-key>"}
-```
+
+   ```powershell
+   Invoke-WebRequest -Uri "http://localhost:5000/api/v1/health" `
+     -Headers @{"X-API-Key" = "<your-key>"}
+   ```
+
 5. **Expected:** 200 OK
 
 ### 10.3 Audit Log Tab
+
 1. **Expected:** Table of recent events (login_success, user_created, etc.)
 2. Actions from this test session should appear
 3. Filter by event type `login_success` → only login events shown
 
 ### 10.4 Sessions Tab
+
 1. **Expected:** List of active sessions with IP, user-agent, expiry
 2. Your current session visible
 3. Revoke the `qa_test_user` session if one exists → no error
 
 ### 10.5 Security Settings Tab
+
 1. **Expected:** Fields for:
    - Max failed attempts (default: 5)
    - Lockout minutes (default: 15)
@@ -455,6 +520,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/health" `
 2. Change a value → Save → **Expected:** Success message, value persists on refresh
 
 ### 10.6 Edit User
+
 1. In Users tab, select any non-admin user from the dropdown
 2. Click **✏️ Edit** button
 3. **Expected:** Dialog opens with current values pre-filled (role, namespace, email, active, force-pw)
@@ -464,6 +530,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/health" `
 7. Reopen Edit → verify saved values persist
 
 ### 10.7 Delete User (Permanent)
+
 1. Create a fresh test user `qa_delete_test` / `TestUser123!` / role=viewer
 2. Select it from the Users dropdown
 3. Click **🗑 Delete** button
@@ -473,10 +540,12 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/health" `
 7. Verify: try to log in as `qa_delete_test` → **Expected:** "Invalid credentials" (user gone from DB)
 
 ### 10.8 Cleanup test data
+
 1. Delete `qa_test_user` from Users tab (if not already deleted in 10.7)
 2. Revoke `QA Test Key` from API Keys tab
 
 ### 10.9 Client Onboarding Tab
+
 1. Click **Client Onboarding** tab (6th tab in Admin Panel)
 2. **Expected:** Dropdown of client namespaces (not global/personal — client-type only)
 3. Select a namespace → 14 fields appear (business name, industry, primary goals, brand tone, SLA tier, contact name, contact email, timezone, preferred language, custom instructions, etc.)
@@ -484,6 +553,7 @@ Invoke-WebRequest -Uri "http://localhost:5000/api/v1/health" `
 5. **Expected:** Success message; navigate away and return — values persist
 
 ### 10.10 Admin Unlock (Context-Aware)
+
 1. In Users tab, find a user that is NOT locked
 2. **Expected:** No "Unlock" button visible for unlocked users (button only appears when locked)
 3. Lock a test account by logging in with wrong password 5 times (from Section 0.4)
@@ -501,19 +571,23 @@ Navigate to: **Usage** (📊 in sidebar)
 > This page is NOT visible to admin/operator/staff. If logged in as admin, you will see an info message redirecting you to Observability.
 
 ### 12.1 KPI Grid
+
 1. **Expected:** Six metric cards visible: AI Runs (30d), Tokens In, Tokens Out, Est. Cost, Avg Quality, Outputs
 2. All values load without error (0 is acceptable, error banners are NOT)
 
 ### 12.2 Namespace Pulse Score
+
 1. **Expected:** Circular SVG gauge visible showing a score 0–100
 2. Label below gauge shows rating: Excellent (≥85) / Good (≥70) / Fair (≥50) / Needs Attention (<50) / Getting Started (no data)
 3. Score breakdown table below gauge shows 4 dimensions with weights: Quality Score (40%), Ticket Resolve (30%), Memory Fresh (20%), Workflow OK (10%)
 
 ### 12.3 Recent Activity Feed
+
 1. **Expected:** List of recent AI runs for this namespace — agent name (human-readable, not UUID), status badge, timestamp
 2. If no runs: empty state message, no error
 
 ### 12.4 Memory Summary
+
 1. **Expected:** Memory entry count and freshness indicator visible
 
 ---
@@ -523,21 +597,25 @@ Navigate to: **Usage** (📊 in sidebar)
 **Navigate to:** Admin → Branding tab (7th tab)
 
 ### 13.1 Branding Tab Visible
+
 1. **Expected:** Branding tab is the 7th tab in Admin Panel
 2. Dropdown of client namespaces visible (not global)
 
 ### 13.2 Set Namespace Brand
+
 1. Select a client namespace
 2. Fill in: Company Name = `QA Test Co`, Icon = `🧪`, Primary Color = `#2563EB`, Accent Color = `#3B82F6`
 3. Click **Save**
 4. **Expected:** Success message
 
 ### 13.3 Client Sees Branded Sidebar
+
 1. Log out, log in as a client user assigned to that namespace
 2. **Expected:** Sidebar logo area shows `🧪 QA Test Co` instead of raw namespace slug
 3. **Expected:** Pill color in aurora hero header matches brand color (approximately)
 
 ### 13.4 Cleanup
+
 1. Log back in as admin
 2. Admin → Branding → select namespace → clear Company Name and Icon → Save
 
@@ -548,6 +626,7 @@ Navigate to: **Usage** (📊 in sidebar)
 These apply to ALL pages.
 
 ### 11.1 Role Scoping
+
 1. Login as `qa_test_user` (viewer role, created in 10.1 — recreate if deleted)
 2. **Expected nav visible:** Overview, Agents, Memory, Projects, Outputs, Tickets, **Usage** (📊)
 3. **Expected nav HIDDEN:** Workflows, Observability, Settings, Admin
@@ -558,15 +637,17 @@ These apply to ALL pages.
 8. **Admin nav HIDDEN:** Usage (admin uses Observability instead)
 
 ### 11.2 Dark/Light Mode
+
 1. Click the circular toggle button (bottom area, fixed at `left:220px` — clears sidebar text)
 2. **Expected:** Entire dashboard switches theme — background, text, cards, sidebar all update
 3. Switch back — state persists during session
 
 ### 11.2a Toolbar Header Icons (visual regression)
+
 Check the Streamlit native header bar (top-right: Stop / Deploy / ⋮ menu) in **both** themes.
 
 | Element | Dark Mode Expected | Light Mode Expected |
-|---------|-------------------|---------------------|
+| --------- | ------------------- | --------------------- |
 | Header background | Dark green `#0A1F0A` | White `#ffffff` |
 | "Deploy" button text | Light `#E8F5E8` | Dark `#1A1A1A` |
 | ⋮ menu button | Three visible dots, transparent bg | Three visible dots, transparent bg |
@@ -575,6 +656,7 @@ Check the Streamlit native header bar (top-right: Stop / Deploy / ⋮ menu) in *
 **Fail signal:** A solid colored square appears next to "Deploy". Root cause: CSS fill override on the MoreVert SVG bounding-box path. Fix: ensure `brand.py` path selectors use `:not([fill="none"])` and JS checks `getAttribute('fill') === 'none'` before setting fill.
 
 ### 11.5 Onboarding Tour (first-time user)
+
 1. Create a brand-new user with role `client` or `viewer` (tour ONLY shows for these two roles — admin/operator/staff skip it entirely)
 2. Log in as that user for the first time
 3. **Expected:** Onboarding tour/modal appears with 5 slides (Welcome, Agents, Memory, Tickets, Usage)
@@ -584,16 +666,20 @@ Check the Streamlit native header bar (top-right: Stop / Deploy / ⋮ menu) in *
 7. **If tour doesn't appear:** Check role — must be `client` or `viewer`. Admin can fix via Users tab → ✏️ Edit → change role
 
 ### 11.3 Error Handling
+
 For each page, check:
+
 - No red Python tracebacks visible to user (internal errors should show friendly message)
 - No `NoneType` or `KeyError` stack traces in the UI
 
 ### 11.4 API Key Auth (alternative to JWT)
+
 ```powershell
 # Replace with actual API key from Section 10.2
 $key = "<your-api-key>"
 Invoke-WebRequest "http://localhost:5000/api/v1/agents" -Headers @{"X-API-Key" = $key}
 ```
+
 **Expected:** 200 with agents list
 
 ---
@@ -601,7 +687,7 @@ Invoke-WebRequest "http://localhost:5000/api/v1/agents" -Headers @{"X-API-Key" =
 ## KNOWN ISSUES TO VERIFY FIXED
 
 | Issue | Fix Commit | How to Verify |
-|-------|-----------|---------------|
+| ------- | ----------- | --------------- |
 | Images not sent to agent chat | `291eece` | Section 2.3 — image analysis works |
 | Overview stats failed on non-main thread | `bed94f7` | Section 1.1 — KPI cards load without error |
 | Browser refresh loses active page | `64c4140` | Navigate to Agents, press F5 — stays on Agents |
@@ -637,7 +723,7 @@ Invoke-WebRequest "http://localhost:5000/api/v1/agents" -Headers @{"X-API-Key" =
 
 Copy this to track results:
 
-```
+```text
 SECTION 0 — AUTH
   0.1 Login                    [ ]
   0.2 Token refresh            [ ]
@@ -764,16 +850,20 @@ SECTION 15 — MODELS, SCORING & SEMANTIC SEARCH
 ## SECTION 14 — COMMERCIAL PACKAGE
 
 ### 14.1 Build Distribution ZIP
+
 ```powershell
 python scripts/build_package.py
 ```
+
 **Expected output:**
+
 - `dist/FaiykeOS-v17.3.zip` created (version comes from `VERSION` in `scripts/build_package.py`)
 - Console shows: `Package built: …`, size, `Files included`, `Files skipped`
 
 **Fail signals:** Python error, zip not created, size 0 KB
 
 ### 14.2 ZIP Contents Integrity
+
 ```powershell
 python -c "
 import zipfile
@@ -786,13 +876,16 @@ print('Has landing:', any('landing/index.html' in n for n in names))
 print('Has requirements:', any('requirements.txt' in n for n in names))
 "
 ```
+
 **Expected:**
+
 - `Secret leaks: NONE` — .env not in ZIP
 - `PDFs included: NONE` — the generated PDFs were removed from the repo (a ZIP built before that still contains them; rebuild it)
 - `Has landing: True`
 - `Has requirements: True`
 
 ### 14.3 Dev Scripts Excluded
+
 ```powershell
 python -c "
 import zipfile
@@ -801,9 +894,11 @@ dev = [n for n in z.namelist() if any(s in n for s in ['debug_namespaces','delet
 print('Dev scripts leaked:', dev if dev else 'NONE')
 "
 ```
+
 **Expected:** `Dev scripts leaked: NONE`
 
 ### 14.4 Landing Pages Load
+
 1. Open `docs/landing/index.html` in browser (double-click or `start`)
 2. **Expected:** Hero loads with green gradient, "FaiykeOS" heading visible, no broken CSS
 3. Open `docs/landing/pricing.html`
@@ -814,42 +909,51 @@ print('Dev scripts leaked:', dev if dev else 'NONE')
 ## SECTION 15 — MODELS, SCORING & SEMANTIC SEARCH
 
 ### 15.1 Models in force
+
 ```powershell
 # Log in first, then (token from /auth/login):
 curl -s -H "Authorization: Bearer <token>" http://127.0.0.1:5000/api/v1/system/models
 ```
+
 **Expected:** `default_model` = `claude-sonnet-5-5`, `fast_model` = `claude-haiku-5-5`, prices `[2.0, 10.0]` and `[0.1, 0.5]` (unless overridden in `.env`)
 
 ### 15.2 Live model change (no restart)
+
 1. In `.env` set `CLAUDE_MODEL=claude-opus-5-5` and save
 2. Call `/system/models` again
 3. **Expected:** `default_model` is now `claude-opus-5-5` without restarting the API. Run any agent; its run record's output shows that model
 4. Clear the value again and confirm it returns to `claude-sonnet-5-5`
 
 ### 15.3 Agents inherit the default
+
 1. `python -c "import sqlite3; print(sqlite3.connect('data/claudeos.db').execute('select model, count(*) from agents group by model').fetchall())"`
 2. **Expected:** `[('', 12)]` (migration 024). The Agents catalog still shows the real model name
 
 ### 15.4 Cost label and price
+
 1. Open **Usage** (client) or **Observability → Token Cost** (admin)
 2. **Expected:** the label names the active model (e.g. "USD · Sonnet 5.5"); no "Sonnet 4.6" text anywhere. Cost = tokens in × $2/M + tokens out × $10/M at default prices
 
 ### 15.5 Quality scoring
+
 1. Run an agent in any namespace (scoring is sampled at ~50%, so run 4–6 times)
 2. Wait ~10 seconds
 3. **Expected:** at least one run shows a quality score in Run History / Overview. `logs/api.log` has no `'ThinkingBlock' object has no attribute 'text'` lines
 
 ### 15.6 Activity log
+
 1. After an agent run, search memory for `activity_log`
 2. **Expected:** an entry with key `activity_log:<agent>:<timestamp>`, category `context`. `logs/api.log` has no `Activity log write failed` lines
 
 ### 15.7 Semantic search
+
 1. `logs/api.log` after startup: **Expected** `ChromaDB warmup complete.` and no `FAILED`, `KeyError '_type'` or `NDArray` lines
 2. Call `GET /api/v1/memory/hybrid-search?q=what+time+zone&namespace=<client-ns>`
 3. **Expected:** relevant entries returned (e.g. `client.timezone`) for every namespace, including older ones
 4. If `_type` errors appear: `python scripts/reindex_vectors.py`, then swap `data/chromadb_rebuild` into `data/chromadb` with the API stopped (see README → Troubleshooting)
 
 ### 15.8 Theme survives refresh
+
 1. Switch to light mode, open **Usage** (as a client), press F5
 2. **Expected:** stays in light mode on the same page; no `UnboundLocalError`; URL contains `theme=light`
 
@@ -858,6 +962,7 @@ curl -s -H "Authorization: Bearer <token>" http://127.0.0.1:5000/api/v1/system/m
 ## REPORTING A FAILURE
 
 When a test fails, note:
+
 1. **Section + step number** (e.g. "3.4 Semantic Search")
 2. **Exact error message** shown in UI
 3. **Flask terminal output** — any Python traceback at the time of the failure

@@ -200,6 +200,7 @@ def _push_table(sb, table: str, ts_col: str) -> TableSyncResult:
     rows_fail = 0
     error_msg = None
     batch_size = 200
+    first_failed = None  # index of the earliest record that could not be delivered
 
     for i in range(0, len(records), batch_size):
         batch = records[i : i + batch_size]

@@ -172,3 +172,72 @@ def test_login_does_not_reveal_account_state_without_password(client, admin_toke
     client.delete(f"/api/v1/admin/users/{u['id']}", headers=adm)
     assert client.post("/api/v1/auth/login", json={"username": "gone", "password": "wrong"}).status_code == 401
     assert client.post("/api/v1/auth/login", json={"username": "gone", "password": "Gone12345678!"}).status_code == 403
+
+
+def test_revoking_origin_session_kills_dashboard_handle(client, app):
+    from core.auth import create_user, revoke_session, validate_refresh_token
+    create_user("sess_r", "SessRevoke1234!", role="operator", namespace=None)
+    r = client.post("/api/v1/auth/login", json={"username": "sess_r", "password": "SessRevoke1234!"})
+    h = {"Authorization": f"Bearer {r.json['access_token']}"}
+    key = client.post("/api/v1/auth/session", headers=h,
+                      json={"refresh_token": r.json["refresh_token"]}).json["session_key"]
+    revoke_session(validate_refresh_token(r.json["refresh_token"])["id"])
+    assert client.get(f"/api/v1/auth/session/{key}").status_code == 404
+
+
+def test_staff_has_no_output_access(client, tenants):
+    from core.auth import create_user
+    create_user("staff_u", "StaffUser1234!", role="staff", namespace=None)
+    h = _login(client, "staff_u", "StaffUser1234!")
+    oid = tenants["other"].id
+    assert client.get("/api/v1/outputs", headers=h).status_code == 403
+    assert client.get(f"/api/v1/outputs/{oid}", headers=h).status_code == 403
+    assert client.get(f"/api/v1/outputs/{oid}/content", headers=h).status_code == 403
+    assert client.delete(f"/api/v1/outputs/{oid}", headers=h).status_code == 403
+    assert client.post("/api/v1/outputs", headers=h, json={"namespace": "ns-b", "title": "x", "content": "y"}).status_code == 403
+    assert client.get("/api/v1/outputs/search?q=b", headers=h).status_code == 403
+
+
+def test_staff_has_no_workflow_access(client, tenants):
+    from core.auth import create_user
+    create_user("staff_w", "StaffWork1234!", role="staff", namespace=None)
+    h = _login(client, "staff_w", "StaffWork1234!")
+    for path in ("/api/v1/workflows", "/api/v1/workflows/runs/all", "/api/v1/workflows/runs/nope",
+                 "/api/v1/workflows/anything", "/api/v1/workflows/anything/runs"):
+        assert client.get(path, headers=h).status_code == 403, path
+
+
+def test_staff_has_no_vault_access(client, tenants):
+    from core.auth import create_user
+    create_user("staff_v", "StaffVault1234!", role="staff", namespace=None)
+    h = _login(client, "staff_v", "StaffVault1234!")
+    for path in ("/api/v1/namespaces", "/api/v1/namespaces/ns-b", "/api/v1/namespaces/ns-b/workspace",
+                 "/api/v1/namespaces/ns-b/context", "/api/v1/projects", "/api/v1/projects/anything"):
+        assert client.get(path, headers=h).status_code == 403, path
+
+
+def test_get_output_tool_does_not_reveal_foreign_namespace(client, tenants):
+    from core.tools.system_tools import _get_output
+    foreign = _get_output(tenants["other"].id, "ns-a")
+    missing = _get_output("no-such-id", "ns-a")
+    assert "ns-b" not in foreign and "belongs" not in foreign
+    assert foreign.replace(tenants["other"].id, "X") == missing.replace("no-such-id", "X")
+
+
+def test_negative_limit_does_not_remove_pagination_cap(tenants):
+    from outputs.manager import list_outputs, save, search
+    for n in range(2):
+        save(namespace="ns-a", title=f"extra{n}", content="a-only")
+    assert len(list_outputs(namespace="ns-a", limit=-1)) == 1  # clamped to 1, not unlimited (3 exist)
+    assert len(search("only", namespace="ns-a", limit=-1)) == 1
+
+
+def test_namespace_slug_cannot_escape_vault_root(client, admin_token, tmp_path):
+    h = {"Authorization": f"Bearer {admin_token}"}
+    victim = tmp_path / "escaped"
+    for slug in (str(victim), "../escaped", "a\n", "..", "a/b"):
+        r = client.post("/api/v1/namespaces", headers=h,
+                        json={"slug": slug, "display_name": "x", "type": "client"})
+        assert r.status_code in (400, 422), slug
+    assert not victim.exists()
+    assert client.get("/api/v1/namespaces/%s" % "..", headers=h).status_code == 404

@@ -10,6 +10,14 @@ from memory.schemas import (
 from core.auth import require_auth, require_role, effective_namespace, can_access_namespace, is_scoped
 from core.utils import utcnow_str
 
+_MEMORY_ROLES = ("admin", "operator", "client", "viewer")  # staff is tickets-only; unknown roles fail closed
+
+
+def require_memory_access(f):
+    """Authenticate, then reject roles with no memory access (checked on every route)."""
+    return require_auth(require_role(*_MEMORY_ROLES)(f))
+
+
 memory_bp = Blueprint("memory", __name__, url_prefix="/api/v1/memory")
 
 
@@ -236,7 +244,7 @@ def search_memory():
 
 
 @memory_bp.post("/import")
-@require_auth
+@require_memory_access
 @require_role("admin", "operator")
 def import_memory():
     from pathlib import Path
@@ -272,7 +280,7 @@ def list_namespaces():
 
 
 @memory_bp.delete("/expire")
-@require_auth
+@require_memory_access
 @require_role("admin", "operator")
 def expire_memory():
     count = engine.expire_stale()
@@ -292,7 +300,7 @@ def agent_context(namespace: str):
 
 
 @memory_bp.post("/consolidate")
-@require_auth
+@require_memory_access
 @require_role("admin", "operator")
 def consolidate_memory():
     """Trigger memory consolidation — Phase 11.1."""
