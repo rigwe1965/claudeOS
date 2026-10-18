@@ -211,3 +211,118 @@ def test_user_token_generation_stays_local():
     records = remote.table.return_value.upsert.call_args.args[0]
     assert records[0]["id"] == user["id"]
     assert "token_generation" not in records[0]
+
+
+@pytest.fixture()
+def rejecting_cloud():
+    """Reject a whole upsert containing PostgreSQL-incompatible text."""
+    from unittest.mock import Mock
+    from postgrest.exceptions import APIError
+
+    remote = Mock()
+    delivered = {}
+    attempts = []
+
+    def execute():
+        batch = remote.table.return_value.upsert.call_args.args[0]
+        attempts.append(batch)
+        if any("\x00" in value for record in batch for value in record.values()
+               if isinstance(value, str)):
+            raise APIError({"code": "22021", "message": "NUL is not supported in text"})
+        delivered.update((record["id"], record) for record in batch)
+
+    remote.table.return_value.upsert.return_value.execute.side_effect = execute
+    return remote, delivered, attempts
+
+
+@pytest.mark.parametrize("initial_state", ["missing", None, "2026-01-01T00:00:00+00:00"])
+@pytest.mark.parametrize("count,rejected_index", [(1, 0), (201, 0), (201, 200)])
+def test_failed_rows_remain_pending(initial_state, count, rejected_index, rejecting_cloud):
+    """Failures in either batch must survive the next watermark selection."""
+    from datetime import datetime, timedelta, timezone
+    from core.database import get_db
+    from sync.engine import _push_table, _update_watermark, get_status, get_sync_log
+
+    if initial_state != "missing":
+        _update_watermark("tickets", initial_state, 0, 0, None)
+    timestamps = [
+        (datetime(2026, 1, 2, tzinfo=timezone.utc) + timedelta(seconds=i)).isoformat()
+        for i in range(count)
+    ]
+    with get_db() as conn:
+        conn.execute("INSERT INTO namespaces (id, slug, display_name) VALUES ('sync', 'sync', 'Sync')")
+        conn.executemany(
+            "INSERT INTO tickets (id, namespace, created_by, title, description, created_at) "
+            "VALUES (?, 'sync', ?, ?, 'description', ?)",
+            [(str(i), f"user-{i}", "bad\x00title" if i == rejected_index else "good", timestamps[i])
+             for i in range(count)],
+        )
+
+    remote, delivered, attempts = rejecting_cloud
+    result = _push_table(remote, "tickets", "created_at")
+    assert result.rows_pushed == count - 1
+    assert result.rows_failed == 1
+    assert result.error
+    state = get_status()["table_states"]["tickets"]
+    assert state["last_synced_at"] == (None if initial_state == "missing" else initial_state)
+    assert state["rows_failed"] == 1
+    assert state["last_error"] == result.error
+    log = get_sync_log()[0]
+    assert (log["rows_ok"], log["rows_fail"]) == (count - 1, 1)
+    assert set(delivered) == {str(i) for i in range(count) if i != rejected_index}
+
+    # Correcting the rejected row must make it eligible without resetting sync state.
+    with get_db() as conn:
+        conn.execute("UPDATE tickets SET title = 'fixed' WHERE id = ?", (str(rejected_index),))
+    result = _push_table(remote, "tickets", "created_at")
+    assert result.rows_pushed == count
+    assert result.rows_failed == 0
+    assert result.error is None
+    assert len(delivered) == count
+    state = get_status()["table_states"]["tickets"]
+    assert state["last_synced_at"] == timestamps[-1]
+    assert state["rows_failed"] == 0
+    assert state["last_error"] is None
+
+    # A successful watermark still prevents unnecessary resends.
+    attempts_before = len(attempts)
+    assert _push_table(remote, "tickets", "created_at").rows_pushed == 0
+    assert len(attempts) == attempts_before
+
+
+@pytest.mark.parametrize("field", ["title", "description"])
+def test_client_ticket_cannot_suppress_another_tenants_sync(field, rejecting_cloud):
+    from flask import Flask
+    from core.api.routes.tickets import tickets_bp
+    from core.auth import create_access_token, create_user
+    from core.database import get_db
+    from sync.engine import _push_table, get_status
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(tickets_bp)
+    ticket_ids = []
+    with app.test_client() as client:
+        for namespace in ("attacker", "victim"):
+            with get_db() as conn:
+                conn.execute(
+                    "INSERT INTO namespaces (id, slug, display_name) VALUES (?, ?, ?)",
+                    (namespace, namespace, namespace),
+                )
+            user = create_user(namespace, "SyncPassword123!", role="client", namespace=namespace)
+            token = create_access_token(user["id"], namespace, "client", namespace)
+            body = {"title": "Title", "description": "Description"}
+            if namespace == "attacker":
+                body[field] += "\x00"
+            response = client.post("/api/v1/tickets", json=body,
+                                   headers={"Authorization": f"Bearer {token}"})
+            assert response.status_code == 201
+            ticket_ids.append(response.json["id"])
+
+    remote, delivered, _ = rejecting_cloud
+    result = _push_table(remote, "tickets", "created_at")
+    assert result.rows_pushed == 1
+    assert result.rows_failed == 1
+    assert set(delivered) == {ticket_ids[1]}
+    assert delivered[ticket_ids[1]]["namespace"] == "victim"
+    assert get_status()["table_states"]["tickets"]["last_synced_at"] is None
