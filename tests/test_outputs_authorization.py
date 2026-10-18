@@ -117,7 +117,7 @@ def test_output_write_permissions(client, output_access, role):
 
 
 @pytest.mark.parametrize("namespace", ["global", "ns-a"])
-@pytest.mark.parametrize("permissions", [["read"], ["read", "write"]])
+@pytest.mark.parametrize("permissions", [[], ["read"], ["read", "write"]])
 def test_output_api_key_permissions(client, output_access, namespace, permissions):
     from core.api.auth import create_api_key
 

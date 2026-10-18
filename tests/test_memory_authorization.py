@@ -150,7 +150,7 @@ def test_memory_write_permissions(memory_client, role):
 
 
 @pytest.mark.parametrize("namespace", ["global", "ns-a"])
-@pytest.mark.parametrize("permissions", [["read"], ["read", "write"]])
+@pytest.mark.parametrize("permissions", [[], ["read"], ["read", "write"]])
 def test_memory_api_key_permissions(memory_client, namespace, permissions):
     from core.api.auth import create_api_key
 

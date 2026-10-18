@@ -41,10 +41,15 @@ def require_api_key(f):
 
 
 def create_api_key(name: str, permissions: list[str] = None, namespace: str = "global") -> tuple[str, str]:
-    """Create a new API key. Returns (raw_key, key_id)."""
+    """Create a new API key; only None defaults to read/write. Returns (raw_key, key_id)."""
     import secrets
     import json
     from core.utils import new_id
+
+    if permissions is None:
+        permissions = ["read", "write"]
+    if not isinstance(permissions, list) or any(p not in ("read", "write") for p in permissions):
+        raise ValueError("permissions must be a list containing only 'read' and 'write'")
 
     raw_key = f"cos-{secrets.token_urlsafe(32)}"
     key_id = new_id()
@@ -53,7 +58,7 @@ def create_api_key(name: str, permissions: list[str] = None, namespace: str = "g
     with get_db() as conn:
         conn.execute(
             "INSERT INTO api_keys(id, name, key_hash, permissions, namespace) VALUES (?, ?, ?, ?, ?)",
-            (key_id, name, key_hash, json.dumps(permissions or ["read", "write"]), namespace),
+            (key_id, name, key_hash, json.dumps(permissions), namespace),
         )
 
     return raw_key, key_id
