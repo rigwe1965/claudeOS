@@ -390,16 +390,26 @@ _JWT_CACHE_TTL = 60.0
 
 
 def _cached_decode_access_token(token: str) -> dict:
-    """Decode and verify JWT, caching valid results for 60s to avoid repeated HMAC verification."""
+    """Decode and verify JWT, caching for at most 60s and never beyond exp."""
     tok_hash = hashlib.sha256(token.encode()).hexdigest()
     now = time.monotonic()
     with _jwt_cache_lock:
         entry = _jwt_cache.get(tok_hash)
-        if entry and now < entry[1]:
-            return entry[0]
+        if entry:
+            if "exp" in entry[0] and int(entry[0]["exp"]) <= time.time():
+                _jwt_cache.pop(tok_hash, None)
+                raise jwt.ExpiredSignatureError("Signature has expired")
+            if now < entry[1]:
+                return entry[0]
+            _jwt_cache.pop(tok_hash, None)
     payload = decode_access_token(token)  # raises on invalid/expired
+    ttl = _JWT_CACHE_TTL
+    if "exp" in payload:
+        ttl = min(ttl, int(payload["exp"]) - time.time())
+        if ttl <= 0:
+            raise jwt.ExpiredSignatureError("Signature has expired")
     with _jwt_cache_lock:
-        _jwt_cache[tok_hash] = (payload, now + _JWT_CACHE_TTL)
+        _jwt_cache[tok_hash] = (payload, now + ttl)
         if len(_jwt_cache) > _JWT_CACHE_MAX:
             evict = sorted(_jwt_cache.keys(), key=lambda k: _jwt_cache[k][1])[:_JWT_CACHE_MAX // 10]
             for k in evict:
