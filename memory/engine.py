@@ -209,7 +209,8 @@ def search_semantic(
             f"""SELECT * FROM memory_entries
                 WHERE id IN ({placeholders})
                   AND confidence >= ?
-                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)""",
+                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                  AND (archived IS NULL OR archived = 0)""",
             (*memory_ids, min_confidence),
         ).fetchall()
     from memory.store import _row_to_entry

@@ -10,6 +10,10 @@ from core.utils import new_id, utcnow_str
 from memory.schemas import MemoryEntry, MemoryEntryCreate, MemoryEntryUpdate, CATEGORY_TTL
 
 
+# Consolidation archives source entries (archived=1); retrieval paths must skip them.
+_NOT_ARCHIVED = "(archived IS NULL OR archived = 0)"
+
+
 def _dt_to_sqlite(dt: datetime) -> str:
     """Convert datetime to SQLite-compatible UTC string (no tz suffix)."""
     if dt.tzinfo is not None:
@@ -50,7 +54,8 @@ def write(entry_create: MemoryEntryCreate) -> MemoryEntry:
                    tags       = excluded.tags,
                    confidence = excluded.confidence,
                    expires_at = excluded.expires_at,
-                   updated_at = excluded.updated_at
+                   updated_at = excluded.updated_at,
+                   archived   = 0
                RETURNING *""",
             (
                 entry_id,
@@ -96,9 +101,13 @@ def list_entries(
     include_expired: bool = False,
     limit: int = 100,
     offset: int = 0,
+    include_archived: bool = False,
 ) -> list[MemoryEntry]:
     conditions = []
     params: list = []
+
+    if not include_archived:
+        conditions.append(_NOT_ARCHIVED)
 
     if namespace:
         conditions.append("namespace = ?")
@@ -181,6 +190,7 @@ def search_text(
                 WHERE memory_fts MATCH ?
                   {ns_filter} {cat_filter}
                   AND (m.expires_at IS NULL OR m.expires_at > CURRENT_TIMESTAMP)
+                  AND (m.archived IS NULL OR m.archived = 0)
                 ORDER BY rank
                 LIMIT ?""",
             params,
@@ -213,6 +223,7 @@ def get_context_for_agent(namespace: str, min_confidence: float = 0.8, limit: in
                WHERE namespace IN (?, 'global')
                  AND confidence >= ?
                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                 AND (archived IS NULL OR archived = 0)
                ORDER BY confidence DESC, updated_at DESC
                LIMIT ?""",
             (namespace, min_confidence, limit),

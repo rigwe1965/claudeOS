@@ -187,6 +187,10 @@ def _consolidate_cluster(namespace: str, category: str, entries: list[dict], sta
                 (utcnow_str(), *source_ids),
             )
 
+        # mem_write invalidated the BM25 corpus before the sources were archived
+        from memory.retriever import invalidate_bm25_cache
+        invalidate_bm25_cache(namespace)
+
         stats["entries_archived"] += len(source_ids)
         stats["entries_created"] += 1
         logger.debug("Consolidated %d entries → '%s'", len(source_ids), consolidated_key[:40])
