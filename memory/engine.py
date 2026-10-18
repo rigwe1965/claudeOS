@@ -208,9 +208,10 @@ def search_semantic(
         rows = conn.execute(
             f"""SELECT * FROM memory_entries
                 WHERE id IN ({placeholders})
+                  AND namespace = ?
                   AND confidence >= ?
                   AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)""",
-            (*memory_ids, min_confidence),
+            (*memory_ids, namespace, min_confidence),
         ).fetchall()
     from memory.store import _row_to_entry
     entries = [_row_to_entry(r) for r in rows]
