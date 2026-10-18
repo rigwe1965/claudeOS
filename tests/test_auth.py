@@ -76,6 +76,36 @@ def test_token_refresh_invalid(client):
     assert resp.status_code == 401
 
 
+@pytest.mark.parametrize(("timestamp_format", "modifier", "expected_status"), [
+    ("%Y-%m-%dT%H:%M:%f+00:00", "+0 seconds", 401),
+    ("%Y-%m-%dT%H:%M:%f+00:00", "+1 minute", 200),
+    ("%Y-%m-%d %H:%M:%S", "+0 seconds", 401),
+    ("%Y-%m-%d %H:%M:%S", "+1 minute", 200),
+    ("%Y-%m-%dT%H:%M:%f+02:00", "+2 hours", 401),
+    ("%Y-%m-%dT%H:%M:%f-02:00", "-119 minutes", 200),
+    ("invalid", "+0 seconds", 401),
+])
+def test_token_refresh_enforces_expiration(client, _admin, timestamp_format, modifier, expected_status):
+    from core.database import get_db
+
+    login = client.post("/api/v1/auth/login", json={"username": "admin", "password": "Admin1234!"})
+    assert login.status_code == 200
+    with get_db() as conn:
+        # Use SQLite's clock, including expiration today in the stored ISO format.
+        conn.execute("UPDATE user_sessions SET expires_at = strftime(?, 'now', ?), "
+                     "last_used_at = '2000-01-01 00:00:00'", (timestamp_format, modifier))
+
+    resp = client.post("/api/v1/auth/refresh", json={"refresh_token": login.json["refresh_token"]})
+    assert resp.status_code == expected_status
+    if expected_status == 401:
+        assert "access_token" not in resp.json
+        with get_db() as conn:
+            assert conn.execute("SELECT last_used_at FROM user_sessions").fetchone()[0] == "2000-01-01 00:00:00"
+    else:
+        assert client.get("/api/v1/auth/me", headers={
+            "Authorization": f"Bearer {resp.json['access_token']}"}).status_code == 200
+
+
 # ── Credential purpose ──────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("issuer", ["login", "dashboard", "change-password"])

@@ -162,9 +162,10 @@ def validate_refresh_token(raw_token: str) -> Optional[dict]:
     """Returns the session row if valid, None otherwise."""
     token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
     with get_db() as conn:
+        # Normalize stored ISO timestamps and SQLite's clock before comparing.
         row = conn.execute(
             "SELECT * FROM user_sessions WHERE token_hash = ? AND revoked = 0 "
-            "AND expires_at > CURRENT_TIMESTAMP AND token_purpose = 'refresh'",
+            "AND julianday(expires_at) > julianday('now') AND token_purpose = 'refresh'",
             (token_hash,),
         ).fetchone()
         if row:
