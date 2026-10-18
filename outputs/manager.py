@@ -81,7 +81,7 @@ def save(
             ),
         )
 
-    logger.info("Saved output %s (%s, %d bytes, ns=%s)", output_id[:8], output_type, size_bytes, namespace)
+    logger.info("Saved output %s (%r, %d bytes, ns=%r)", output_id[:8], output_type, size_bytes, namespace)
     return Output(
         id=output_id,
         namespace=namespace,
