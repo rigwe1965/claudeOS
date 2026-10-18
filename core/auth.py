@@ -422,7 +422,7 @@ _USER_STATE_TTL = 5.0
 
 
 def _user_state(user_id: str) -> Optional[dict]:
-    """Authoritative role/namespace/active/revocation state for a JWT subject (5s cache)."""
+    """Authoritative authorization and password-change state for a JWT subject (5s cache)."""
     now = time.monotonic()
     with _jwt_cache_lock:
         entry = _user_state_cache.get(user_id)
@@ -430,7 +430,7 @@ def _user_state(user_id: str) -> Optional[dict]:
             return entry[0]
     with get_db() as conn:
         row = conn.execute(
-            "SELECT role, namespace, is_active, tokens_valid_after FROM users WHERE id = ?", (user_id,)
+            "SELECT role, namespace, is_active, tokens_valid_after, must_change_password FROM users WHERE id = ?", (user_id,)
         ).fetchone()
     state = dict(row) if row else None
     with _jwt_cache_lock:
@@ -469,6 +469,10 @@ def require_auth(f):
                 if (not state or not state["is_active"]
                         or payload.get("iat", 0) < state["tokens_valid_after"]):
                     return jsonify({"error": "Invalid token"}), 401
+                # Check server state for every token issuer, including existing sessions.
+                if state["must_change_password"] and request.endpoint not in {
+                        "auth.change_password", "auth.logout"}:
+                    return jsonify({"error": "Password change required", "must_change_password": True}), 403
                 g.user_id        = payload["sub"]
                 g.username       = payload["username"]
                 # Role/namespace come from the DB, not the (possibly stale) token claims

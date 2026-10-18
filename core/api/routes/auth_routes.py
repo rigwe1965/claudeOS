@@ -213,6 +213,9 @@ def change_password():
     if not user or not verify_password(current_pw, user["password_hash"]):
         return jsonify({"error": "Current password incorrect"}), 401
 
+    if user["must_change_password"] and new_pw == current_pw:
+        return jsonify({"error": "New password must be different from current password"}), 422
+
     err = validate_password_strength(new_pw, user["username"])
     if err:
         return jsonify({"error": err}), 422
