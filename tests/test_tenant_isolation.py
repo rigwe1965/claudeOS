@@ -230,3 +230,14 @@ def test_negative_limit_does_not_remove_pagination_cap(tenants):
         save(namespace="ns-a", title=f"extra{n}", content="a-only")
     assert len(list_outputs(namespace="ns-a", limit=-1)) == 1  # clamped to 1, not unlimited (3 exist)
     assert len(search("only", namespace="ns-a", limit=-1)) == 1
+
+
+def test_namespace_slug_cannot_escape_vault_root(client, admin_token, tmp_path):
+    h = {"Authorization": f"Bearer {admin_token}"}
+    victim = tmp_path / "escaped"
+    for slug in (str(victim), "../escaped", "a\n", "..", "a/b"):
+        r = client.post("/api/v1/namespaces", headers=h,
+                        json={"slug": slug, "display_name": "x", "type": "client"})
+        assert r.status_code in (400, 422), slug
+    assert not victim.exists()
+    assert client.get("/api/v1/namespaces/%s" % "..", headers=h).status_code == 404
