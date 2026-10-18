@@ -200,6 +200,7 @@ def _push_table(sb, table: str, ts_col: str) -> TableSyncResult:
     rows_fail = 0
     error_msg = None
     batch_size = 200
+    first_failed = None  # index of the earliest record that could not be delivered
 
     for i in range(0, len(records), batch_size):
         batch = records[i : i + batch_size]
@@ -208,12 +209,28 @@ def _push_table(sb, table: str, ts_col: str) -> TableSyncResult:
             rows_ok += len(batch)
         except Exception as e:
             logger.error("Upsert failed for %s batch %d: %s", table, i // batch_size, e)
-            rows_fail += len(batch)
             error_msg = str(e)[:500]
+            # Isolate the rejected record(s) so one bad row can't suppress its batch-mates
+            for j, rec in enumerate(batch, start=i):
+                try:
+                    sb.table(table).upsert([rec]).execute()
+                    rows_ok += 1
+                except Exception:
+                    rows_fail += 1
+                    if first_failed is None:
+                        first_failed = j
 
     duration = _ms(t0)
-    new_watermark = records[-1].get(ts_col, now) if rows_ok > 0 else watermark
-    _update_watermark(table, new_watermark or now, rows_ok, rows_fail, error_msg)
+    if first_failed is None:
+        new_watermark = records[-1].get(ts_col, now)
+    else:
+        # Never advance past an undelivered record; ts ties with it must be retried too
+        failed_ts = records[first_failed].get(ts_col)
+        new_watermark = watermark
+        for rec in records[:first_failed]:
+            if rec.get(ts_col) is not None and rec[ts_col] < failed_ts:
+                new_watermark = rec[ts_col]
+    _update_watermark(table, new_watermark, rows_ok, rows_fail, error_msg)
     _log_sync_run(log_id, table, rows_ok, rows_fail, duration, error_msg, now)
 
     logger.info("Sync %s: pushed=%d failed=%d (%dms)", table, rows_ok, rows_fail, duration)

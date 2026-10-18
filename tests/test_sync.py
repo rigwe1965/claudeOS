@@ -192,3 +192,47 @@ def test_workflow_webhook_secret_never_pushed():
     assert pushed, "expected the workflow row to be pushed"
     assert all("webhook_secret" not in rec for rec in pushed)
     assert secret not in repr(pushed)
+
+
+def _fake_sb(bad_ids, pushed):
+    class _Q:
+        def __init__(self, rows): self.rows = rows
+        def execute(self):
+            if any(r["id"] in bad_ids for r in self.rows):
+                raise RuntimeError("rejected")
+            pushed.extend(r["id"] for r in self.rows)
+
+    class _T:
+        def upsert(self, rows): return _Q(rows)
+
+    class _SB:
+        def table(self, name): return _T()
+
+    return _SB()
+
+
+def test_failed_record_does_not_advance_watermark_or_block_others(monkeypatch):
+    import sync.engine as se
+    rows = [{"id": f"r{i}", "updated_at": f"2026-01-0{i + 1}T00:00:00"} for i in range(3)]
+
+    class _Conn:
+        def execute(self, sql, params=()):
+            class _C:
+                def fetchone(s): return None
+                def fetchall(s): return rows
+            return _C()
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(se, "get_db", lambda: _Conn())
+    saved = {}
+    monkeypatch.setattr(se, "_update_watermark", lambda t, w, ok, fail, err: saved.update(w=w, ok=ok, fail=fail))
+    monkeypatch.setattr(se, "_log_sync_run", lambda *a, **k: None)
+    pushed = []
+    res = se._push_table(_fake_sb({"r1"}, pushed), "tickets", "updated_at")
+    assert pushed == ["r0", "r2"] and res.rows_failed == 1
+    assert saved["w"] == "2026-01-01T00:00:00"  # stops before the failed record
+
+    pushed.clear()
+    se._push_table(_fake_sb({"r0"}, pushed), "tickets", "updated_at")
+    assert saved["w"] is None  # nothing before the failure, no prior watermark: stay unset
