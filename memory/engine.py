@@ -205,12 +205,14 @@ def search_semantic(
     order_map = {mid: idx for idx, mid in enumerate(memory_ids)}
     placeholders = ",".join("?" * len(memory_ids))
     with get_db() as conn:
+        # Vector IDs are candidates; SQLite enforces the requested namespace.
         rows = conn.execute(
             f"""SELECT * FROM memory_entries
                 WHERE id IN ({placeholders})
+                  AND namespace = ?
                   AND confidence >= ?
                   AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)""",
-            (*memory_ids, min_confidence),
+            (*memory_ids, namespace, min_confidence),
         ).fetchall()
     from memory.store import _row_to_entry
     entries = [_row_to_entry(r) for r in rows]
