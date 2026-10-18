@@ -244,6 +244,7 @@ def fetch_page(url: str, max_chars: int = 5000) -> str:
 
     try:
         import requests
+        import urllib3
         from urllib.parse import urljoin
         headers = {
             "User-Agent": (
@@ -252,27 +253,43 @@ def fetch_page(url: str, max_chars: int = 5000) -> str:
                 "Chrome/120.0.0.0 Safari/537.36"
             )
         }
-        # Follow redirects manually so every hop is re-validated against the SSRF guard
+        # Each hop gets its own pool, pinned to a validated numeric address.
+        # Direct pools do not use environment proxies or resolve the hostname again.
         current = url
-        resp = None
         for _ in range(_MAX_REDIRECTS + 1):
-            blocked = _blocked_url_reason(current)
-            if blocked:
-                return f"Blocked URL: {blocked}"
-            resp = requests.get(current, headers=headers, timeout=12,
-                                allow_redirects=False, stream=True)
-            if resp.is_redirect and resp.headers.get("Location"):
-                current = urljoin(current, resp.headers["Location"])
-                resp.close()
-                resp = None
-                continue
+            try:
+                prepared, address = _prepare_public_request(current, headers)
+            except ValueError as e:
+                return f"Blocked URL: {e}"
+            target = urlparse(prepared.url)
+            pool_type = urllib3.HTTPConnectionPool
+            tls = {}
+            if target.scheme == "https":
+                pool_type = urllib3.HTTPSConnectionPool
+                tls = {
+                    "cert_reqs": "CERT_REQUIRED",
+                    "ca_certs": requests.certs.where(),
+                    "server_hostname": target.hostname,
+                    "assert_hostname": target.hostname,
+                }
+            port = target.port or (443 if target.scheme == "https" else 80)
+            with pool_type(address, port=port, **tls) as pool:
+                with pool.urlopen(
+                    "GET", prepared.path_url,
+                    headers={**prepared.headers, "Host": target.netloc},
+                    timeout=12, redirect=False, retries=False, preload_content=False,
+                ) as resp:
+                    location = resp.get_redirect_location()
+                    if location:
+                        current = urljoin(prepared.url, location)
+                        continue
+                    if resp.status >= 400:
+                        return f"Failed to fetch page: HTTP {resp.status}"
+                    raw = resp.read(_MAX_FETCH_BYTES + 1, decode_content=True)
+                    encoding = requests.utils.get_encoding_from_headers(resp.headers) or "utf-8"
             break
-        if resp is None:
+        else:
             return "Failed to fetch page: too many redirects."
-        resp.raise_for_status()
-        raw = resp.raw.read(_MAX_FETCH_BYTES + 1, decode_content=True)
-        resp.close()
-        encoding = resp.encoding or "utf-8"
         text = _extract_text(raw[:_MAX_FETCH_BYTES].decode(encoding, errors="replace"))
         if not text:
             return "Page loaded but no readable text content found."
@@ -287,23 +304,44 @@ _MAX_REDIRECTS = 4
 _MAX_FETCH_BYTES = 2_000_000
 
 
-def _blocked_url_reason(url: str) -> str | None:
-    """Return a reason string if the URL targets a non-public address, else None."""
-    parsed = urlparse(url)
+def _prepare_public_request(url: str, headers: dict):
+    """Prepare the actual URL and return it with a validated numeric destination."""
+    import requests
+
+    # Reject authority syntax that URL parsers can interpret differently, including
+    # backslashes, userinfo, encoded hosts and scoped IPv6 addresses.
+    if re.search(r"[\x00-\x1f\x7f]", url):
+        raise ValueError("ambiguous URL syntax is not allowed")
+    original = urlparse(url)
+    if original.scheme not in ("http", "https") or not original.hostname:
+        raise ValueError("only http(s) URLs are allowed")
+    if re.search(r"[\\\s]", original.netloc):
+        raise ValueError("ambiguous URL authority is not allowed")
+    if original.username is not None or "%" in original.netloc:
+        raise ValueError("userinfo and encoded hosts are not allowed")
+
+    prepared = requests.Request("GET", url, headers=headers).prepare()
+    parsed = urlparse(prepared.url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return "only http(s) URLs are allowed"
+        raise ValueError("only http(s) URLs are allowed")
+    port = parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80)
+    if not 1 <= port <= 65535:
+        raise ValueError("invalid port")
     try:
-        infos = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80),
+        infos = socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM,
                                    proto=socket.IPPROTO_TCP)
-    except socket.gaierror:
-        return "host could not be resolved"
+    except socket.gaierror as e:
+        raise ValueError("host could not be resolved") from e
+    if not infos:
+        raise ValueError("host could not be resolved")
+    addresses = []
     for info in infos:
-        ip = ipaddress.ip_address(info[4][0].split("%")[0])
-        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-            ip = ip.ipv4_mapped
-        if not ip.is_global:
-            return "private, loopback or link-local addresses are not allowed"
-    return None
+        ip = ipaddress.ip_address(info[4][0])
+        checked_ip = ip.ipv4_mapped if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped else ip
+        if not checked_ip.is_global:
+            raise ValueError("private, loopback or link-local addresses are not allowed")
+        addresses.append(str(ip))
+    return prepared, addresses[0]
 
 
 # ── Private: multi-search ─────────────────────────────────────────────────────
