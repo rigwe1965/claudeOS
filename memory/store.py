@@ -207,10 +207,12 @@ def namespace_counts() -> dict[str, int]:
 
 def get_context_for_agent(namespace: str, min_confidence: float = 0.8, limit: int = 20) -> list[MemoryEntry]:
     """Fetch high-confidence, non-expired entries for injection into agent system prompt."""
+    # Legacy global failure logs contain details from multiple namespaces.
     with get_db() as conn:
         rows = conn.execute(
             """SELECT * FROM memory_entries
                WHERE namespace IN (?, 'global')
+                 AND NOT (namespace = 'global' AND key = 'error_log')
                  AND confidence >= ?
                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
                ORDER BY confidence DESC, updated_at DESC
