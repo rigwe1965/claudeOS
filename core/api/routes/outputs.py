@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, Response
 
-from core.auth import require_auth, require_write, effective_namespace, can_access_namespace, is_scoped
+from core.auth import require_auth, require_role, require_write, effective_namespace, can_access_namespace, is_scoped
 require_api_key = require_auth  # alias
 
 outputs_bp = Blueprint("outputs", __name__, url_prefix="/api/v1/outputs")
@@ -11,6 +11,7 @@ outputs_bp = Blueprint("outputs", __name__, url_prefix="/api/v1/outputs")
 
 @outputs_bp.get("")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def list_outputs():
     from outputs.manager import list_outputs as _list
     namespace = effective_namespace(request.args.get("namespace"))
@@ -24,6 +25,7 @@ def list_outputs():
 
 @outputs_bp.post("")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 @require_write
 def save_output():
     from outputs.manager import save
@@ -52,6 +54,7 @@ def save_output():
 
 @outputs_bp.get("/search")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def search_outputs():
     from outputs.manager import search
     query = request.args.get("q", "")
@@ -65,16 +68,16 @@ def search_outputs():
 
 @outputs_bp.get("/stats/all")
 @require_api_key
+@require_role("admin", "operator")
 def output_stats_all():
     """Aggregated stats (global + by_namespace + by_type) in one call."""
     from outputs.manager import get_stats_all
-    if is_scoped():
-        return jsonify({"error": "Forbidden"}), 403
     return jsonify(get_stats_all())
 
 
 @outputs_bp.get("/stats")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def output_stats():
     from outputs.manager import get_stats
     namespace = effective_namespace(request.args.get("namespace"))
@@ -83,6 +86,7 @@ def output_stats():
 
 @outputs_bp.delete("/bulk")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 @require_write
 def bulk_delete_outputs():
     from outputs.manager import delete_bulk as _del_bulk
@@ -103,6 +107,7 @@ def bulk_delete_outputs():
 
 @outputs_bp.get("/<output_id>")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def get_output(output_id: str):
     from outputs.manager import get_by_id
     out = get_by_id(output_id)
@@ -115,6 +120,7 @@ def get_output(output_id: str):
 
 @outputs_bp.get("/<output_id>/content")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def get_content(output_id: str):
     """Return raw content as plain text."""
     from outputs.manager import get_by_id
@@ -128,6 +134,7 @@ def get_content(output_id: str):
 
 @outputs_bp.get("/<output_id>/export")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def export_output(output_id: str):
     import re as _re
     from outputs.manager import get_by_id
@@ -154,6 +161,7 @@ def export_output(output_id: str):
 
 @outputs_bp.delete("/<output_id>")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 @require_write
 def delete_output(output_id: str):
     from outputs.manager import get_by_id, delete
