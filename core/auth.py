@@ -110,7 +110,15 @@ def _secret() -> str:
     return get_settings().CLAUDEOS_SECRET_KEY
 
 
-def create_access_token(user_id: str, username: str, role: str, namespace: Optional[str]) -> str:
+def create_access_token(user_id: str, username: str, role: str, namespace: Optional[str],
+                        *, token_generation: Optional[int] = None) -> str:
+    # Credential-based issuers pass the generation captured during validation;
+    # re-reading it later could upgrade credentials revoked before signing.
+    if token_generation is None:
+        user = get_user_by_id(user_id)
+        if not user:
+            raise jwt.InvalidTokenError("User not found")
+        token_generation = user["token_generation"]
     ttl_minutes = _cfg_int("access_token_minutes", 60)
     now = utcnow()
     payload = {
@@ -118,6 +126,7 @@ def create_access_token(user_id: str, username: str, role: str, namespace: Optio
         "username": username,
         "role": role,
         "namespace": namespace,
+        "token_generation": token_generation,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=ttl_minutes)).timestamp()),
         "type": "access",
@@ -164,8 +173,9 @@ def validate_refresh_token(raw_token: str) -> Optional[dict]:
     with get_db() as conn:
         # Normalize stored ISO timestamps and SQLite's clock before comparing.
         row = conn.execute(
-            "SELECT * FROM user_sessions WHERE token_hash = ? AND revoked = 0 "
-            "AND julianday(expires_at) > julianday('now') AND token_purpose = 'refresh'",
+            "SELECT s.*, u.token_generation FROM user_sessions s JOIN users u ON u.id = s.user_id "
+            "WHERE s.token_hash = ? AND s.revoked = 0 "
+            "AND julianday(s.expires_at) > julianday('now') AND s.token_purpose = 'refresh'",
             (token_hash,),
         ).fetchone()
         if row:
@@ -417,42 +427,27 @@ def _cached_decode_access_token(token: str) -> dict:
     return payload
 
 
-_user_state_cache: dict[str, tuple[Optional[dict], float]] = {}
-_USER_STATE_TTL = 5.0
-
-
 def _user_state(user_id: str) -> Optional[dict]:
-    """Authoritative authorization and password-change state for a JWT subject (5s cache)."""
-    now = time.monotonic()
-    with _jwt_cache_lock:
-        entry = _user_state_cache.get(user_id)
-        if entry and now < entry[1]:
-            return entry[0]
+    """Read current account state on every request, including across workers."""
     with get_db() as conn:
         row = conn.execute(
-            "SELECT role, namespace, is_active, tokens_valid_after, must_change_password FROM users WHERE id = ?", (user_id,)
+            "SELECT role, namespace, is_active, tokens_valid_after, must_change_password, "
+            "token_generation FROM users WHERE id = ?", (user_id,)
         ).fetchone()
-    state = dict(row) if row else None
-    with _jwt_cache_lock:
-        _user_state_cache[user_id] = (state, now + _USER_STATE_TTL)
-        if len(_user_state_cache) > _JWT_CACHE_MAX:
-            _user_state_cache.clear()
-    return state
+    return dict(row) if row else None
 
 
-def revoke_user_access(user_id: str) -> None:
-    """Invalidate every access token, refresh session and dashboard handle for a user."""
+def revoke_user_access(user_id: str) -> Optional[int]:
+    """Revoke all credentials atomically; return the new generation if the user exists."""
     with get_db() as conn:
-        conn.execute("UPDATE users SET tokens_valid_after = ? WHERE id = ?", (int(utcnow().timestamp()), user_id))
+        conn.execute(
+            "UPDATE users SET tokens_valid_after = ?, token_generation = token_generation + 1 WHERE id = ?",
+            (int(utcnow().timestamp()), user_id),
+        )
         conn.execute("UPDATE user_sessions SET revoked = 1 WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM dashboard_sessions WHERE user_id = ?", (user_id,))
-    with _jwt_cache_lock:
-        _user_state_cache.pop(user_id, None)
-
-
-def invalidate_user_state(user_id: str) -> None:
-    with _jwt_cache_lock:
-        _user_state_cache.pop(user_id, None)
+        row = conn.execute("SELECT token_generation FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row["token_generation"] if row else None
 
 
 def require_auth(f):
@@ -467,6 +462,8 @@ def require_auth(f):
                 payload = _cached_decode_access_token(token)
                 state = _user_state(payload["sub"])
                 if (not state or not state["is_active"]
+                        or type(payload.get("token_generation")) is not int
+                        or payload["token_generation"] != state["token_generation"]
                         or payload.get("iat", 0) < state["tokens_valid_after"]):
                     return jsonify({"error": "Invalid token"}), 401
                 # Check server state for every token issuer, including existing sessions.

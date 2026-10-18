@@ -192,3 +192,22 @@ def test_workflow_webhook_secret_never_pushed():
     assert pushed, "expected the workflow row to be pushed"
     assert all("webhook_secret" not in rec for rec in pushed)
     assert secret not in repr(pushed)
+
+
+def test_user_token_generation_stays_local():
+    """The local revocation counter must not change the remote users schema."""
+    from unittest.mock import Mock
+    from core.auth import create_user, revoke_user_access
+    from sync.engine import _push_table
+
+    user = create_user("sync_user", "SyncPassword123!", role="operator")
+    revoke_user_access(user["id"])
+    remote = Mock()
+    result = _push_table(remote, "users", "created_at")
+
+    assert result.error is None
+    assert result.rows_pushed == 1
+    remote.table.assert_called_once_with("users")
+    records = remote.table.return_value.upsert.call_args.args[0]
+    assert records[0]["id"] == user["id"]
+    assert "token_generation" not in records[0]

@@ -66,7 +66,8 @@ def login():
     clear_failed_attempts(user["id"])
     audit_log("login_success", user_id=user["id"], username=username, ip=_ip(), ua=_ua(), namespace=user.get("namespace"))
 
-    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"))
+    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"),
+                                       token_generation=user["token_generation"])
     raw_refresh, refresh_hash = create_refresh_token()
     store_refresh_token(user["id"], refresh_hash, ip=_ip(), ua=_ua())
 
@@ -151,7 +152,8 @@ def refresh():
     if not user or not user["is_active"]:
         return jsonify({"error": "User not found or disabled"}), 401
 
-    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"))
+    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"),
+                                       token_generation=session["token_generation"])
     audit_log("token_refresh", user_id=user["id"], username=user["username"], ip=_ip(), ua=_ua())
 
     return jsonify({"access_token": access_token, "expires_in": 3600})
@@ -227,8 +229,9 @@ def change_password():
             (new_hash, user["id"]),
         )
     # Kill every other session/token, then hand this caller a fresh pair
-    revoke_user_access(user["id"])
-    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"))
+    generation = revoke_user_access(user["id"])
+    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"),
+                                       token_generation=generation)
     raw_refresh, refresh_hash = create_refresh_token()
     store_refresh_token(user["id"], refresh_hash, ip=_ip(), ua=_ua())
 
@@ -398,7 +401,8 @@ def restore_dashboard_session(key):
             "WHERE id = ?", (refresh_hash, row["auth_session_id"]),
         )
 
-    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"))
+    access_token = create_access_token(user["id"], user["username"], user["role"], user.get("namespace"),
+                                       token_generation=user["token_generation"])
     return jsonify({
         "access_token":         access_token,
         "refresh_token":        raw_refresh,

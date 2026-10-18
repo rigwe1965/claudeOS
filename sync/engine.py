@@ -39,7 +39,7 @@ _SYNC_TABLES: dict[str, str] = {
 # Columns to exclude from sync (sensitive or local-only data)
 _EXCLUDE_COLS: dict[str, list[str]] = {
     "outputs": ["file_path"],
-    "users": ["password_hash", "failed_attempts", "locked_until"],
+    "users": ["password_hash", "failed_attempts", "locked_until", "token_generation"],
     "workflows": ["webhook_secret"],
 }
 
