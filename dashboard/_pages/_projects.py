@@ -160,12 +160,14 @@ def _render_projects(api_get, api_post, namespaces: list):
                         api_post(f"/projects/{proj['id']}", {"status": new_status}, method="PATCH")
                         st.rerun()
 
-    st.markdown("---")
-    with st.expander("+ New Project"):
-        _new_project_form(api_post, namespaces)
+    # Project creation is admin/operator-only in the API; the attach scan reads the server filesystem
+    if role in ("admin", "operator"):
+        st.markdown("---")
+        with st.expander("+ New Project"):
+            _new_project_form(api_post, namespaces)
 
-    with st.expander("Attach Existing Project"):
-        _attach_project_form(api_post, namespaces)
+        with st.expander("Attach Existing Project"):
+            _attach_project_form(api_post, namespaces)
 
 
 def _render_context(api_get, api_post, namespaces: list):
@@ -248,6 +250,10 @@ def _render_context(api_get, api_post, namespaces: list):
 def _scan_directory(path_str: str) -> dict:
     """Scan a local directory and infer project metadata. Never raises."""
     result = {"ok": False, "error": None, "name": "", "slug": "", "description": "", "tech_stack": []}
+
+    if st.session_state.get("user_role") not in ("admin", "operator"):
+        result["error"] = "Not permitted."
+        return result
 
     try:
         p = Path(path_str.strip())
