@@ -99,4 +99,4 @@ def send_reminder(
         server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to, msg.as_string())
 
-    logger.info("Reminder email sent to %s: %s (calendar=%s)", to, subject, bool(event_time))
+    logger.info("Reminder email sent to %r: %r (calendar=%s)", to, subject, bool(event_time))

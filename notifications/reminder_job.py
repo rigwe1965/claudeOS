@@ -97,9 +97,9 @@ def run() -> int:
                     (utcnow_str(), entry_id),
                 )
             sent += 1
-            logger.info("Reminder sent for entry %s (%s) with calendar=%s", entry_id[:8], key, bool(event_time))
+            logger.info("Reminder sent for entry %s (%r) with calendar=%s", entry_id[:8], key, bool(event_time))
 
         except Exception as e:
-            logger.error("Failed to send reminder for entry %s: %s", entry_id[:8], e)
+            logger.error("Failed to send reminder for entry %s: %r", entry_id[:8], str(e))
 
     return sent
