@@ -14,14 +14,32 @@ from email import encoders
 logger = logging.getLogger("claudeos.notifications.email")
 
 
+def _ics_text_line(name: str, value: str) -> str:
+    """Serialize a TEXT property with escaping and folding per RFC 5545."""
+    value = (value.replace("\\", "\\\\")
+             .replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
+             .replace(";", "\\;").replace(",", "\\,"))
+    folded = []
+    octets = 0
+    for char in f"{name}:{value}":
+        size = len(char.encode("utf-8"))
+        if octets + size > 75:
+            folded.append("\r\n ")
+            octets = 1  # The continuation space counts toward the line limit.
+        folded.append(char)
+        octets += size
+    return "".join(folded)
+
+
 def _build_ics(summary: str, description: str, dtstart: datetime) -> str:
     """Build an iCalendar (.ics) string for a 30-minute event."""
     dtend = dtstart + timedelta(minutes=30)
     fmt = "%Y%m%dT%H%M%SZ"
     now = datetime.now(timezone.utc)
     uid = f"{uuid.uuid4()}@claudeos"
-    # iCalendar escapes newlines as a literal backslash-n (backslashes can't sit in an f-string expr before 3.12)
-    ics_description = description.replace("\n", "\\n")
+    summary_line = _ics_text_line("SUMMARY", summary)
+    description_line = _ics_text_line("DESCRIPTION", description)
+    alarm_description_line = _ics_text_line("DESCRIPTION", summary)
     return (
         "BEGIN:VCALENDAR\r\n"
         "VERSION:2.0\r\n"
@@ -32,13 +50,13 @@ def _build_ics(summary: str, description: str, dtstart: datetime) -> str:
         f"DTSTAMP:{now.strftime(fmt)}\r\n"
         f"DTSTART:{dtstart.strftime(fmt)}\r\n"
         f"DTEND:{dtend.strftime(fmt)}\r\n"
-        f"SUMMARY:{summary}\r\n"
-        f"DESCRIPTION:{ics_description}\r\n"
+        f"{summary_line}\r\n"
+        f"{description_line}\r\n"
         "STATUS:CONFIRMED\r\n"
         "BEGIN:VALARM\r\n"
         "TRIGGER:-PT10M\r\n"
         "ACTION:DISPLAY\r\n"
-        f"DESCRIPTION:{summary}\r\n"
+        f"{alarm_description_line}\r\n"
         "END:VALARM\r\n"
         "END:VEVENT\r\n"
         "END:VCALENDAR\r\n"

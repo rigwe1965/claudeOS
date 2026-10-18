@@ -1,4 +1,4 @@
-"""SMTP transport security regressions; no external mail server required."""
+"""SMTP and calendar security regressions; no external mail server required."""
 import smtplib
 import ssl
 from datetime import datetime, timezone
@@ -149,3 +149,66 @@ def test_reminder_tls_failure_prevents_credentials_and_message(reminder_transpor
 
     transport.login.assert_not_called()
     transport.sendmail.assert_not_called()
+
+
+@pytest.mark.parametrize("newline", ["\r\n", "\n", "\r"])
+def test_reminder_calendar_contains_untrusted_text(reminder_transport, newline):
+    _, transport = reminder_transport
+    # Non-ASCII subjects survive email header encoding even with newlines.
+    title = f"Réunion{newline}ATTENDEE:mailto:injected@example.com{newline}END:VEVENT"
+    body = f"Notes{newline}BEGIN:VEVENT{newline}SUMMARY:Injected"
+    reminder_email.send_reminder(
+        to="recipient@example.com",
+        subject=f"ClaudeOS Reminder: {title}",
+        body=body,
+        smtp_host="smtp.example.com",
+        smtp_port=587,
+        smtp_user="sender@example.com",
+        smtp_password="test-password",
+        event_time=datetime(2026, 10, 18, 12, tzinfo=timezone.utc),
+    )
+
+    message = message_from_string(transport.sendmail.call_args.args[2])
+    attachment = message.get_payload()[1]
+    assert attachment.get_content_type() == "text/calendar"
+    calendar = attachment.get_payload(decode=True).decode("utf-8")
+    lines = calendar.replace("\r\n ", "").split("\r\n")
+    assert [line.split(":", 1)[0] for line in lines] == [
+        "BEGIN", "VERSION", "PRODID", "METHOD", "BEGIN", "UID", "DTSTAMP",
+        "DTSTART", "DTEND", "SUMMARY", "DESCRIPTION", "STATUS", "BEGIN",
+        "TRIGGER", "ACTION", "DESCRIPTION", "END", "END", "END", "",
+    ]
+    assert lines[9] == r"SUMMARY:Réunion\nATTENDEE:mailto:injected@example.com\nEND:VEVENT"
+    assert lines[10] == r"DESCRIPTION:Notes\nBEGIN:VEVENT\nSUMMARY:Injected"
+    assert lines[15] == r"DESCRIPTION:Réunion\nATTENDEE:mailto:injected@example.com\nEND:VEVENT"
+    assert [line for line in lines if line.startswith(("BEGIN:", "END:"))] == [
+        "BEGIN:VCALENDAR", "BEGIN:VEVENT", "BEGIN:VALARM",
+        "END:VALARM", "END:VEVENT", "END:VCALENDAR",
+    ]
+
+
+def test_calendar_escapes_text_delimiters_and_literal_backslashes():
+    calendar = reminder_email._build_ics(
+        r"Review\notes, phase; two: details",
+        "Literal \\n, comma; semicolon\r\nNew line",
+        datetime(2026, 10, 18, 12, tzinfo=timezone.utc),
+    )
+    lines = calendar.replace("\r\n ", "").split("\r\n")
+    assert r"SUMMARY:Review\\notes\, phase\; two: details" in lines
+    assert r"DESCRIPTION:Review\\notes\, phase\; two: details" in lines
+    assert r"DESCRIPTION:Literal \\n\, comma\; semicolon\nNew line" in lines
+    assert "DTSTART:20261018T120000Z" in lines
+    assert "DTEND:20261018T123000Z" in lines
+
+
+@pytest.mark.parametrize("text", ["", "a" * 200, "a" * 66 + "🙂ü漢" * 50])
+def test_calendar_folds_lines_without_splitting_utf8(text):
+    calendar = reminder_email._build_ics(
+        text, text, datetime(2026, 10, 18, 12, tzinfo=timezone.utc),
+    )
+    for line in calendar.encode("utf-8").split(b"\r\n"):
+        assert len(line) <= 75
+        line.decode("utf-8")
+    unfolded = calendar.replace("\r\n ", "")
+    assert f"SUMMARY:{text}\r\n" in unfolded
+    assert unfolded.count(f"DESCRIPTION:{text}\r\n") == 2
