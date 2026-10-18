@@ -208,12 +208,23 @@ def _push_table(sb, table: str, ts_col: str) -> TableSyncResult:
             rows_ok += len(batch)
         except Exception as e:
             logger.error("Upsert failed for %s batch %d: %s", table, i // batch_size, e)
-            rows_fail += len(batch)
-            error_msg = str(e)[:500]
+            if len(batch) == 1:
+                rows_fail += 1
+                error_msg = str(e)[:500]
+                continue
+            # Isolate rejected records so they cannot block valid rows in this batch.
+            for record in batch:
+                try:
+                    sb.table(table).upsert([record]).execute()
+                    rows_ok += 1
+                except Exception as row_error:
+                    rows_fail += 1
+                    error_msg = str(row_error)[:500]
 
     duration = _ms(t0)
-    new_watermark = records[-1].get(ts_col, now) if rows_ok > 0 else watermark
-    _update_watermark(table, new_watermark or now, rows_ok, rows_fail, error_msg)
+    # Keep every failed row eligible for retry, including on the first sync.
+    new_watermark = records[-1].get(ts_col, now) if rows_fail == 0 else watermark
+    _update_watermark(table, new_watermark, rows_ok, rows_fail, error_msg)
     _log_sync_run(log_id, table, rows_ok, rows_fail, duration, error_msg, now)
 
     logger.info("Sync %s: pushed=%d failed=%d (%dms)", table, rows_ok, rows_fail, duration)
@@ -267,7 +278,7 @@ def _ms(t0: float) -> int:
 
 def _update_watermark(
     table: str,
-    last_synced_at: str,
+    last_synced_at: Optional[str],
     rows_pushed: int,
     rows_failed: int,
     error: Optional[str],
