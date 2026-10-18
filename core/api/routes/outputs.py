@@ -17,9 +17,12 @@ def list_outputs():
     namespace = effective_namespace(request.args.get("namespace"))
     output_type = request.args.get("type")
     tags = request.args.getlist("tag")
-    limit = min(int(request.args.get("limit", 50)), 200)
-    offset = int(request.args.get("offset", 0))
-    outputs = _list(namespace=namespace, output_type=output_type, tags=tags or None, limit=limit, offset=offset)
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+        outputs = _list(namespace=namespace, output_type=output_type, tags=tags or None, limit=limit, offset=offset)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     return jsonify([_out_dict(o) for o in outputs])
 
 
@@ -59,10 +62,13 @@ def search_outputs():
     from outputs.manager import search
     query = request.args.get("q", "")
     namespace = effective_namespace(request.args.get("namespace"))
-    limit = min(int(request.args.get("limit", 20)), 100)
     if not query:
         return jsonify({"error": "q parameter required"}), 400
-    results = search(query, namespace=namespace, limit=limit)
+    try:
+        limit = int(request.args.get("limit", 20))
+        results = search(query, namespace=namespace, limit=limit)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     return jsonify([r.model_dump() for r in results])
 
 
