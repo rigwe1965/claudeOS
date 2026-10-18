@@ -510,11 +510,13 @@ def require_role(*allowed_roles: str):
 
 
 def require_write(f):
-    """403 for read-only roles (viewer). Must be used after @require_auth."""
+    """403 for read-only accounts or API keys. Must be used after @require_auth."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if getattr(g, "user_role", None) == "viewer":
             return jsonify({"error": "Read-only account"}), 403
+        if getattr(g, "api_read_only", False):
+            return jsonify({"error": "API key is read-only"}), 403
         return f(*args, **kwargs)
     return decorated
 
