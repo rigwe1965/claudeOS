@@ -16,3 +16,11 @@ def test_log_safe_escapes_reminder_key_newlines():
     from core.api.middleware import _log_safe
     out = _log_safe("k\n2026-01-01 INFO claudeos.api FAKE\r")
     assert "\n" not in out and "\r" not in out and "\\n" in out
+
+
+def test_output_type_is_validated(client, admin_token):
+    h = {"Authorization": f"Bearer {admin_token}"}
+    body = {"namespace": "global", "title": "t", "content": "c"}
+    bad = client.post("/api/v1/outputs", headers=h, json={**body, "output_type": "x\nFAKE"})
+    assert bad.status_code == 422
+    assert client.post("/api/v1/outputs", headers=h, json={**body, "output_type": "note"}).status_code == 201
