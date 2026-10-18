@@ -28,6 +28,7 @@ WORKSPACE_SUBDIRS = ("context", "memory", "outputs")
 # ── Namespace ─────────────────────────────────────────────────────────────────
 
 def create_namespace(data: NamespaceCreate) -> Namespace:
+    _validate_slug(data.slug)
     ns_id = new_id()
     now = utcnow_str()
     with get_db() as conn:
@@ -42,7 +43,7 @@ def create_namespace(data: NamespaceCreate) -> Namespace:
                 json.dumps(data.metadata), now,
             ),
         )
-    _provision_workspace(data.slug)
+        _provision_workspace(data.slug)
     logger.info("Created namespace: %s", data.slug)
     return get_namespace_by_slug(data.slug)
 
@@ -229,15 +230,21 @@ def get_workspace_stats(slug: str) -> dict:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _provision_workspace(slug: str) -> None:
-    for subdir in WORKSPACE_SUBDIRS:
-        (VAULT_ROOT / slug / subdir).mkdir(parents=True, exist_ok=True)
+    _validate_slug(slug)
+    workspace = VAULT_ROOT.resolve() / slug
+    paths = [(workspace / subdir).resolve() for subdir in WORKSPACE_SUBDIRS]
+    # Check every destination before creating anything, including existing symlinks.
+    if any(workspace not in path.parents for path in paths):
+        raise ValueError(f"Workspace path escapes namespace: {slug!r}")
+    for path in paths:
+        path.mkdir(parents=True, exist_ok=True)
     logger.info("Provisioned workspace: vault/workspaces/%s/", slug)
 
 
 def _validate_slug(slug: str) -> None:
     """Prevent path traversal. Slug must be alphanumeric + hyphens only."""
     import re
-    if not re.match(r'^[a-z0-9][a-z0-9\-]*$', slug):
+    if not re.fullmatch(r'[a-z0-9][a-z0-9\-]*', slug):
         raise ValueError(f"Invalid namespace slug: {slug!r}")
 
 
