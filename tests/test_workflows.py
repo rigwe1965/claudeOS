@@ -17,7 +17,7 @@ def admin_headers(client):
     return {"Authorization": f"Bearer {resp.json['access_token']}"}
 
 
-def _db_seed_workflow(name="test-wf"):
+def _db_seed_workflow(name="test-wf", namespace="global"):
     """Insert a workflow directly via the registry (no POST API endpoint)."""
     from workflows.registry import upsert
     from workflows.schemas import WorkflowDefinition
@@ -29,6 +29,7 @@ def _db_seed_workflow(name="test-wf"):
         description="For testing",
         trigger_type="manual",
         steps=[],
+        namespace=namespace,
     )
     upsert(wf)
     return wf
@@ -95,6 +96,102 @@ def test_workflow_runs_empty(client, admin_headers):
     resp = client.get("/api/v1/workflows/runs/all", headers=admin_headers)
     assert resp.status_code == 200
     assert isinstance(resp.json, list)
+
+
+@pytest.fixture
+def workflow_read_access(app, monkeypatch, tmp_path):
+    from core.auth import create_access_token, create_user
+    from vault import manager as vault
+    from vault.schemas import NamespaceCreate
+    from workflows.pipeline import create_run_record, _update_run
+
+    monkeypatch.setattr(vault, "VAULT_ROOT", tmp_path / "vault")
+    workflows, runs = [], []
+    for namespace in ("ns-a", "ns-b"):
+        vault.create_namespace(NamespaceCreate(slug=namespace, display_name=namespace, type="client"))
+        wf = _db_seed_workflow(name=f"wf-{namespace}", namespace=namespace)
+        workflows.append(wf)
+        run_id = create_run_record(wf.id, "test", {"namespace": namespace, "private": namespace})
+        _update_run(run_id, "done", output=f"private {namespace}",
+                    steps_log=[{"output_preview": f"private {namespace}"}])
+        runs.append(run_id)
+    # Runs must be checked by their own context, even under an accessible workflow.
+    foreign_run = create_run_record(workflows[0].id, "test", {"namespace": "ns-b"})
+    runs.append(foreign_run)
+
+    def headers(role, namespace=None):
+        user = create_user("workflow_reader", "WorkflowReader123!", role=role, namespace=namespace)
+        token = create_access_token(user["id"], user["username"], role, namespace)
+        return {"Authorization": f"Bearer {token}"}
+
+    return workflows, runs, headers
+
+
+def _workflow_read_paths(workflow, run_id):
+    return ("", f"/{workflow.name}", f"/{workflow.name}/runs", "/runs/all", f"/runs/{run_id}")
+
+
+@pytest.mark.parametrize("role, namespace", [("staff", None), ("staff", "ns-a"), ("unknown", None)])
+def test_roles_without_workflow_access_never_reach_storage(client, workflow_read_access, monkeypatch,
+                                                         role, namespace):
+    from workflows import pipeline, registry
+
+    workflows, runs, make_headers = workflow_read_access
+    headers = make_headers(role, namespace)
+
+    def forbidden_storage(*args, **kwargs):
+        pytest.fail("Unauthorized workflow request reached storage")
+
+    monkeypatch.setattr(registry, "list_workflows", forbidden_storage)
+    monkeypatch.setattr(registry, "get_by_name", forbidden_storage)
+    monkeypatch.setattr(pipeline, "list_runs", forbidden_storage)
+    monkeypatch.setattr(pipeline, "get_run", forbidden_storage)
+    for path in _workflow_read_paths(workflows[0], runs[0]):
+        response = client.get(f"/api/v1/workflows{path}", headers=headers)
+        assert response.status_code == 403, (path, response.get_data(as_text=True))
+
+
+def _assert_workflow_read_permissions(client, workflows, runs, headers, scoped):
+    listing = client.get("/api/v1/workflows", headers=headers)
+    assert listing.status_code == 200
+    expected_workflows = workflows[:1] if scoped else workflows
+    assert {wf["id"] for wf in listing.json} == {wf.id for wf in expected_workflows}
+    all_runs = client.get("/api/v1/workflows/runs/all", headers=headers)
+    assert all_runs.status_code == 200
+    assert {run["id"] for run in all_runs.json} == set(runs[:1] if scoped else runs)
+    for index, wf in enumerate(workflows):
+        allowed = not scoped or index == 0
+        detail = client.get(f"/api/v1/workflows/{wf.name}", headers=headers)
+        assert detail.status_code == (200 if allowed else 404)
+        if allowed:
+            assert ("steps" in detail.json) == (not scoped)
+        history = client.get(f"/api/v1/workflows/{wf.name}/runs", headers=headers)
+        assert history.status_code == (200 if allowed else 404)
+        if allowed:
+            expected = {runs[index]}
+            if not scoped and index == 0:
+                expected.add(runs[2])
+            assert {run["id"] for run in history.json} == expected
+    for index, run_id in enumerate(runs):
+        response = client.get(f"/api/v1/workflows/runs/{run_id}", headers=headers)
+        assert response.status_code == (200 if not scoped or index == 0 else 404)
+
+
+@pytest.mark.parametrize("role", ["admin", "operator", "client", "viewer"])
+def test_workflow_read_permissions(client, workflow_read_access, role):
+    workflows, runs, make_headers = workflow_read_access
+    scoped = role in ("client", "viewer")
+    headers = make_headers(role, "ns-a" if scoped else None)
+    _assert_workflow_read_permissions(client, workflows, runs, headers, scoped)
+
+
+@pytest.mark.parametrize("namespace", ["global", "ns-a"])
+def test_workflow_read_api_key_permissions(client, workflow_read_access, namespace):
+    from core.api.auth import create_api_key
+
+    workflows, runs, _ = workflow_read_access
+    raw_key, _ = create_api_key("workflow-key", permissions=["read"], namespace=namespace)
+    _assert_workflow_read_permissions(client, workflows, runs, {"X-API-Key": raw_key}, namespace == "ns-a")
 
 
 # ── Run delete ───────────────────────────────────────────────────────────────

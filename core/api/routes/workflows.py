@@ -21,6 +21,7 @@ workflows_bp = Blueprint("workflows", __name__, url_prefix="/api/v1/workflows")
 
 @workflows_bp.get("")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def list_workflows():
     from workflows.registry import list_workflows as _list
     trigger_type = request.args.get("trigger_type")
@@ -33,6 +34,7 @@ def list_workflows():
 
 @workflows_bp.get("/<name>")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def get_workflow(name: str):
     from workflows.registry import get_by_name
     wf = get_by_name(name)
@@ -76,6 +78,7 @@ def trigger_workflow(name: str):
 
 @workflows_bp.get("/<name>/runs")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def get_workflow_runs(name: str):
     from workflows.registry import get_by_name
     from workflows.pipeline import list_runs
@@ -93,6 +96,7 @@ def get_workflow_runs(name: str):
 
 @workflows_bp.get("/runs/all")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def list_all_runs():
     from workflows.pipeline import list_runs
     try:
@@ -109,6 +113,7 @@ def list_all_runs():
 
 @workflows_bp.get("/runs/<run_id>")
 @require_api_key
+@require_role("admin", "operator", "client", "viewer")
 def get_run(run_id: str):
     from workflows.pipeline import get_run as _get_run
     run = _get_run(run_id)
