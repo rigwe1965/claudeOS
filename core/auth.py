@@ -422,6 +422,11 @@ def _cached_decode_access_token(token: str) -> dict:
 _user_state_cache: dict[str, tuple[Optional[dict], float]] = {}
 _USER_STATE_TTL = 5.0
 
+# Endpoints a user with must_change_password may still call (change it, or end the session).
+_PASSWORD_CHANGE_ENDPOINTS = frozenset({
+    "auth.change_password", "auth.logout", "auth.me", "auth.create_dashboard_session",
+})
+
 
 def _user_state(user_id: str) -> Optional[dict]:
     """Authoritative role/namespace/active/revocation state for a JWT subject (5s cache)."""
@@ -432,7 +437,7 @@ def _user_state(user_id: str) -> Optional[dict]:
             return entry[0]
     with get_db() as conn:
         row = conn.execute(
-            "SELECT role, namespace, is_active, tokens_valid_after FROM users WHERE id = ?", (user_id,)
+            "SELECT role, namespace, is_active, tokens_valid_after, must_change_password FROM users WHERE id = ?", (user_id,)
         ).fetchone()
     state = dict(row) if row else None
     with _jwt_cache_lock:
@@ -481,6 +486,8 @@ def require_auth(f):
                 # treated as "unscoped" by effective_namespace() consumers.
                 if g.user_role in ("client", "viewer") and not g.user_namespace:
                     return jsonify({"error": "Account has no namespace assigned"}), 403
+                if state["must_change_password"] and request.endpoint not in _PASSWORD_CHANGE_ENDPOINTS:
+                    return jsonify({"error": "Password change required", "must_change_password": True}), 403
                 return f(*args, **kwargs)
             except jwt.ExpiredSignatureError:
                 return jsonify({"error": "Token expired"}), 401
