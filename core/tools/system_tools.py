@@ -273,17 +273,7 @@ def _get_output(output_id: str, namespace: str) -> str:
         ).fetchone()
 
     if not row:
-        # Try without namespace scoping to give a useful error
-        with get_db() as conn:
-            exists = conn.execute(
-                "SELECT id, namespace FROM outputs WHERE id = ? AND deleted_at IS NULL",
-                (output_id,),
-            ).fetchone()
-        if exists:
-            return (
-                f"Output '{output_id}' exists but belongs to namespace '{exists['namespace']}', "
-                f"not '{namespace}'. You can only access outputs in your own workspace."
-            )
+        # Same response for missing and other-namespace outputs (no cross-namespace existence oracle)
         return f"Output '{output_id}' not found. Use search_outputs or get_recent_outputs to find valid IDs."
 
     tags = []

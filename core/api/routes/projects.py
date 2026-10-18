@@ -4,7 +4,14 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from core.auth import require_auth, require_role, require_write, effective_namespace, can_access_namespace
-require_api_key = require_auth  # alias — all existing @require_api_key decorators now use require_auth
+
+_VAULT_ROLES = ("admin", "operator", "client", "viewer")  # staff is tickets-only; unknown roles fail closed
+
+
+def require_api_key(f):
+    """Authenticate, then reject roles with no vault access (checked on every route)."""
+    return require_auth(require_role(*_VAULT_ROLES)(f))
+
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/v1")
 

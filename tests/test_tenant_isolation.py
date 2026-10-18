@@ -196,3 +196,29 @@ def test_staff_has_no_output_access(client, tenants):
     assert client.delete(f"/api/v1/outputs/{oid}", headers=h).status_code == 403
     assert client.post("/api/v1/outputs", headers=h, json={"namespace": "ns-b", "title": "x", "content": "y"}).status_code == 403
     assert client.get("/api/v1/outputs/search?q=b", headers=h).status_code == 403
+
+
+def test_staff_has_no_workflow_access(client, tenants):
+    from core.auth import create_user
+    create_user("staff_w", "StaffWork1234!", role="staff", namespace=None)
+    h = _login(client, "staff_w", "StaffWork1234!")
+    for path in ("/api/v1/workflows", "/api/v1/workflows/runs/all", "/api/v1/workflows/runs/nope",
+                 "/api/v1/workflows/anything", "/api/v1/workflows/anything/runs"):
+        assert client.get(path, headers=h).status_code == 403, path
+
+
+def test_staff_has_no_vault_access(client, tenants):
+    from core.auth import create_user
+    create_user("staff_v", "StaffVault1234!", role="staff", namespace=None)
+    h = _login(client, "staff_v", "StaffVault1234!")
+    for path in ("/api/v1/namespaces", "/api/v1/namespaces/ns-b", "/api/v1/namespaces/ns-b/workspace",
+                 "/api/v1/namespaces/ns-b/context", "/api/v1/projects", "/api/v1/projects/anything"):
+        assert client.get(path, headers=h).status_code == 403, path
+
+
+def test_get_output_tool_does_not_reveal_foreign_namespace(client, tenants):
+    from core.tools.system_tools import _get_output
+    foreign = _get_output(tenants["other"].id, "ns-a")
+    missing = _get_output("no-such-id", "ns-a")
+    assert "ns-b" not in foreign and "belongs" not in foreign
+    assert foreign.replace(tenants["other"].id, "X") == missing.replace("no-such-id", "X")
