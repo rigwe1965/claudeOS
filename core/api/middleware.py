@@ -1,4 +1,5 @@
 """Request logging and CORS middleware."""
+import re
 import time
 import logging
 from flask import request, g
@@ -7,6 +8,9 @@ from core.utils import new_id, utcnow_str
 from core.database import get_db
 
 logger = logging.getLogger("claudeos.api")
+
+# /auth/session/<handle> carries a reusable session handle; never log it.
+_SESSION_HANDLE_RE = re.compile(r"(/auth/session/)[^/?#]+")
 
 
 def register_middleware(app):
@@ -21,7 +25,7 @@ def register_middleware(app):
         logger.info(
             "%s %s %s %dms",
             request.method,
-            request.path,
+            _SESSION_HANDLE_RE.sub(r"\1[redacted]", request.path),
             response.status_code,
             duration_ms,
         )
