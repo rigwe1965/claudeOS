@@ -222,3 +222,11 @@ def test_get_output_tool_does_not_reveal_foreign_namespace(client, tenants):
     missing = _get_output("no-such-id", "ns-a")
     assert "ns-b" not in foreign and "belongs" not in foreign
     assert foreign.replace(tenants["other"].id, "X") == missing.replace("no-such-id", "X")
+
+
+def test_negative_limit_does_not_remove_pagination_cap(tenants):
+    from outputs.manager import list_outputs, save, search
+    for n in range(2):
+        save(namespace="ns-a", title=f"extra{n}", content="a-only")
+    assert len(list_outputs(namespace="ns-a", limit=-1)) == 1  # clamped to 1, not unlimited (3 exist)
+    assert len(search("only", namespace="ns-a", limit=-1)) == 1
