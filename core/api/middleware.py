@@ -11,6 +11,12 @@ logger = logging.getLogger("claudeos.api")
 
 # /auth/session/<handle> carries a reusable session handle; never log it.
 _SESSION_HANDLE_RE = re.compile(r"(/auth/session/)[^/?#]+")
+# request.path is percent-decoded: escape control chars so a crafted path can't forge log lines.
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
+
+
+def _log_safe(value: str) -> str:
+    return _CONTROL_CHARS_RE.sub(lambda m: m.group().encode("unicode_escape").decode(), value)
 
 
 def register_middleware(app):
@@ -25,7 +31,7 @@ def register_middleware(app):
         logger.info(
             "%s %s %s %dms",
             request.method,
-            _SESSION_HANDLE_RE.sub(r"\1[redacted]", request.path),
+            _log_safe(_SESSION_HANDLE_RE.sub(r"\1[redacted]", request.path)),
             response.status_code,
             duration_ms,
         )
