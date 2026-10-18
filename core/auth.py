@@ -14,7 +14,7 @@ from typing import Optional
 
 import bcrypt
 import jwt
-from flask import g, jsonify, request
+from flask import abort, g, jsonify, request
 
 from core.database import get_db
 from core.utils import new_id, utcnow
@@ -525,17 +525,22 @@ def is_scoped() -> bool:
 
 def can_access_namespace(namespace: Optional[str]) -> bool:
     """True if the caller may touch data belonging to `namespace`."""
-    if not is_scoped():
+    role = getattr(g, "user_role", None)
+    if role in ("admin", "operator"):
         return True
-    return bool(namespace) and namespace == getattr(g, "user_namespace", None)
+    return role in ("client", "viewer") and bool(namespace) and namespace == getattr(g, "user_namespace", None)
 
 
 def effective_namespace(requested: Optional[str] = None) -> Optional[str]:
     """Return the namespace to query based on caller's role.
     Clients/viewers are always restricted to their own namespace — never trust caller value.
-    Improperly provisioned client/viewer accounts with no namespace return None (no data).
+    Unsupported roles and client/viewer accounts without a namespace are denied.
     """
-    role = getattr(g, "user_role", "admin")
+    role = getattr(g, "user_role", None)
+    if role in ("admin", "operator"):
+        return requested
     if role in ("client", "viewer"):
-        return getattr(g, "user_namespace", None)  # HI-04: removed `or requested` fallback
-    return requested
+        namespace = getattr(g, "user_namespace", None)
+        if namespace:
+            return namespace
+    abort(403)
