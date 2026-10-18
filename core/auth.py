@@ -144,8 +144,15 @@ def create_refresh_token() -> tuple[str, str]:
     return raw, hashed
 
 
+# user_sessions.user_agent value that marks a password-reset token. Only /auth/forgot-password
+# may write it; client-supplied User-Agent text must never carry it.
+RESET_TOKEN_MARKER = "password_reset"
+
+
 def store_refresh_token(user_id: str, token_hash: str, ip: str = "", ua: str = "") -> str:
     """Stores session row. Returns session id."""
+    if ua.strip().lower() == RESET_TOKEN_MARKER:
+        ua = "invalid"
     ttl_days = _cfg_int("refresh_token_days", 7)
     session_id = new_id()
     expires_at = (utcnow() + timedelta(days=ttl_days)).isoformat()
