@@ -1,6 +1,10 @@
 """Security regressions for the public-only page fetcher, without network access."""
 import io
 import socket
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -244,3 +248,55 @@ def test_http_errors_close_response(public_dns, transport):
     responses.append(response)
     assert web.fetch_page("http://example.com/") == "Failed to fetch page: HTTP 404"
     assert response.closed
+
+
+@pytest.mark.parametrize("tag", [
+    "script", "style", "nav", "header", "footer", "noscript", "aside", "iframe", "svg",
+])
+def test_extract_text_omits_unreadable_elements(tag):
+    assert web._extract_text(f"<p>Before</p><{tag}>Hidden</{tag}><p>After</p>") == "Before After"
+
+
+@pytest.mark.parametrize("markup, expected", [
+    ("<p>A &amp; B &#60;tag&#62; &amp;lt;</p>\n\n\n<p>C\t  D</p>", "A & B <tag> &lt; \n\n C D"),
+    ("<NAV><aside>Hidden</aside><nav>Nested</nav>Hidden</NAV>Visible", "Visible"),
+    ("Before<script><script><nav>Hidden</script>After", "Before After"),
+    ("Before<style><style><aside>Hidden</style>After", "Before After"),
+    ("Before<script>Hidden</style>Still hidden</script>After", "Before After"),
+    ("<header>Hidden</header><headerish>Visible</headerish>", "Visible"),
+    ("<svg/>Visible<br/>text", "Visible text"),
+    ("Visible<script>Hidden", "Visible"),
+    ("Visible<nav>Hidden", "Visible"),
+    ("", ""),
+])
+def test_extract_text_handles_entities_nesting_and_malformed_html(markup, expected):
+    assert web._extract_text(markup) == expected
+
+
+def test_fetch_page_drops_unclosed_script_content(public_dns, transport):
+    _, responses = transport
+    responses.append(_response(b"<p>Visible &amp; readable</p><script>" * 2 + b"Hidden"))
+    assert call_tool("fetch_page", {"url": "https://example.com/"}) == "Visible & readable"
+
+
+@pytest.mark.parametrize("fragment", ["<script>", "<nav>", "<", "<a "])
+def test_malformed_html_at_download_limit_finishes_promptly(fragment):
+    # Isolate extraction so restoring a quadratic regex fails within a bounded
+    # time instead of hanging the test runner on attacker-controlled HTML.
+    source = textwrap.dedent("""\
+        import sys
+        from core.tools.web_search import _extract_text, _MAX_FETCH_BYTES
+
+        fragment = sys.argv[1]
+        payload = fragment * (_MAX_FETCH_BYTES // len(fragment))
+        text = _extract_text('Visible' + payload)
+        if fragment in ('<script>', '<nav>'):
+            assert text == 'Visible'
+        else:
+            assert text == ('Visible' + payload).rstrip()
+    """)
+    subprocess.run(
+        [sys.executable, "-c", source, fragment],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True, text=True, check=True, timeout=10,
+    )

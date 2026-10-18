@@ -560,13 +560,31 @@ def _format_news_results(articles: list[dict]) -> str:
 
 def _extract_text(html_content: str) -> str:
     """Strip HTML and return clean readable text."""
-    # Remove scripts, styles, nav, header, footer, ads
-    text = re.sub(
-        r"<(script|style|nav|header|footer|noscript|aside|iframe|svg)[^>]*>.*?</(script|style|nav|header|footer|noscript|aside|iframe|svg)>",
-        " ", html_content, flags=re.DOTALL | re.IGNORECASE,
-    )
-    # Remove all remaining HTML tags
-    text = re.sub(r"<[^>]+>", " ", text)
+    ignored_tags = {"script", "style", "nav", "header", "footer", "noscript", "aside", "iframe", "svg"}
+    hidden = []
+    parts = []
+    position = 0
+    # Stop each token at another '<' as well as '>'. Failed matches cannot
+    # rescan the same suffix, even for repeated unclosed or incomplete tags.
+    for token in re.finditer(r"<[^<>]*>", html_content):
+        if not hidden:
+            parts.extend((html_content[position:token.start()], " "))
+        tag = re.match(r"<(/?)([^\s/>]+)", token.group())
+        if tag:
+            closing, name = tag.groups()
+            name = name.lower()
+            if closing:
+                if hidden and hidden[-1] == name:
+                    hidden.pop()
+            elif hidden and hidden[-1] in {"script", "style"}:
+                # Script/style bodies are raw text, including apparent tags.
+                pass
+            elif name in ignored_tags and not token.group().endswith("/>"):
+                hidden.append(name)
+        position = token.end()
+    if not hidden:
+        parts.append(html_content[position:])
+    text = "".join(parts)
     # Decode HTML entities
     text = html.unescape(text)
     # Normalize whitespace
