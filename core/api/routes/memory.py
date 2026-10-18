@@ -10,6 +10,14 @@ from memory.schemas import (
 from core.auth import require_auth, require_role, require_write, effective_namespace, can_access_namespace, is_scoped
 from core.utils import utcnow_str
 
+_MEMORY_ROLES = ("admin", "operator", "client", "viewer")  # staff is tickets-only; unknown roles fail closed
+
+
+def require_memory_access(f):
+    """Authenticate, then reject roles with no memory access (checked on every route)."""
+    return require_auth(require_role(*_MEMORY_ROLES)(f))
+
+
 memory_bp = Blueprint("memory", __name__, url_prefix="/api/v1/memory")
 
 
@@ -32,7 +40,7 @@ def _entry_dict(e) -> dict:
 
 
 @memory_bp.get("")
-@require_auth
+@require_memory_access
 def list_memory():
     namespace = effective_namespace(request.args.get("namespace"))
     category = request.args.get("category")
@@ -62,7 +70,7 @@ def list_memory():
 
 
 @memory_bp.post("")
-@require_auth
+@require_memory_access
 @require_write
 def write_memory():
     data = request.get_json(silent=True)
@@ -100,7 +108,7 @@ def write_memory():
 
 
 @memory_bp.delete("/bulk")
-@require_auth
+@require_memory_access
 @require_write
 def bulk_delete_memory():
     ids = (request.get_json(silent=True) or {}).get("ids") or []
@@ -155,7 +163,7 @@ def bulk_delete_memory():
 
 
 @memory_bp.get("/<entry_id>")
-@require_auth
+@require_memory_access
 def get_memory(entry_id: str):
     entry = engine.get_by_id(entry_id)
     if not entry:
@@ -166,7 +174,7 @@ def get_memory(entry_id: str):
 
 
 @memory_bp.put("/<entry_id>")
-@require_auth
+@require_memory_access
 @require_write
 def update_memory(entry_id: str):
     data = request.get_json(silent=True)
@@ -191,7 +199,7 @@ def update_memory(entry_id: str):
 
 
 @memory_bp.delete("/<entry_id>")
-@require_auth
+@require_memory_access
 @require_write
 def delete_memory(entry_id: str):
     entry = engine.get_by_id(entry_id)
@@ -206,7 +214,7 @@ def delete_memory(entry_id: str):
 
 
 @memory_bp.post("/search")
-@require_auth
+@require_memory_access
 def search_memory():
     data = request.get_json(silent=True)
     if not data:
@@ -233,7 +241,7 @@ def search_memory():
 
 
 @memory_bp.post("/import")
-@require_auth
+@require_memory_access
 @require_role("admin", "operator")
 def import_memory():
     from pathlib import Path
@@ -258,7 +266,7 @@ def import_memory():
 
 
 @memory_bp.get("/namespaces")
-@require_auth
+@require_memory_access
 def list_namespaces():
     counts = engine.namespace_counts()
     if is_scoped():
@@ -268,7 +276,7 @@ def list_namespaces():
 
 
 @memory_bp.delete("/expire")
-@require_auth
+@require_memory_access
 @require_role("admin", "operator")
 def expire_memory():
     count = engine.expire_stale()
@@ -276,7 +284,7 @@ def expire_memory():
 
 
 @memory_bp.get("/context/<namespace>")
-@require_auth
+@require_memory_access
 def agent_context(namespace: str):
     min_confidence = float(request.args.get("min_confidence", 0.8))
     if not can_access_namespace(namespace):
@@ -287,7 +295,7 @@ def agent_context(namespace: str):
 
 
 @memory_bp.post("/consolidate")
-@require_auth
+@require_memory_access
 @require_role("admin", "operator")
 def consolidate_memory():
     """Trigger memory consolidation — Phase 11.1."""
@@ -300,7 +308,7 @@ def consolidate_memory():
 
 
 @memory_bp.get("/hybrid-search")
-@require_auth
+@require_memory_access
 def hybrid_search():
     """Hybrid BM25+vector search with RRF — Phase 11.2."""
     query = request.args.get("q", "").strip()
