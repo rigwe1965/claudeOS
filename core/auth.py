@@ -169,7 +169,7 @@ def validate_refresh_token(raw_token: str) -> Optional[dict]:
     token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
     with get_db() as conn:
         row = conn.execute(
-            "SELECT * FROM user_sessions WHERE token_hash = ? AND revoked = 0 AND expires_at > CURRENT_TIMESTAMP AND user_agent != 'password_reset'",
+            "SELECT * FROM user_sessions WHERE token_hash = ? AND revoked = 0 AND datetime(expires_at) > datetime('now') AND user_agent != 'password_reset'",
             (token_hash,),
         ).fetchone()
         if row:
