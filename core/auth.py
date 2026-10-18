@@ -402,8 +402,16 @@ def _cached_decode_access_token(token: str) -> dict:
         if entry and now < entry[1]:
             return entry[0]
     payload = decode_access_token(token)  # raises on invalid/expired
+    # Never retain claims past the token's own expiry
+    ttl = _JWT_CACHE_TTL
+    try:
+        ttl = min(ttl, float(payload["exp"]) - time.time())
+    except (KeyError, TypeError, ValueError):
+        ttl = 0.0
+    if ttl <= 0:
+        return payload
     with _jwt_cache_lock:
-        _jwt_cache[tok_hash] = (payload, now + _JWT_CACHE_TTL)
+        _jwt_cache[tok_hash] = (payload, now + ttl)
         if len(_jwt_cache) > _JWT_CACHE_MAX:
             evict = sorted(_jwt_cache.keys(), key=lambda k: _jwt_cache[k][1])[:_JWT_CACHE_MAX // 10]
             for k in evict:
