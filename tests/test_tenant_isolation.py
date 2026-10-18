@@ -172,3 +172,27 @@ def test_login_does_not_reveal_account_state_without_password(client, admin_toke
     client.delete(f"/api/v1/admin/users/{u['id']}", headers=adm)
     assert client.post("/api/v1/auth/login", json={"username": "gone", "password": "wrong"}).status_code == 401
     assert client.post("/api/v1/auth/login", json={"username": "gone", "password": "Gone12345678!"}).status_code == 403
+
+
+def test_revoking_origin_session_kills_dashboard_handle(client, app):
+    from core.auth import create_user, revoke_session, validate_refresh_token
+    create_user("sess_r", "SessRevoke1234!", role="operator", namespace=None)
+    r = client.post("/api/v1/auth/login", json={"username": "sess_r", "password": "SessRevoke1234!"})
+    h = {"Authorization": f"Bearer {r.json['access_token']}"}
+    key = client.post("/api/v1/auth/session", headers=h,
+                      json={"refresh_token": r.json["refresh_token"]}).json["session_key"]
+    revoke_session(validate_refresh_token(r.json["refresh_token"])["id"])
+    assert client.get(f"/api/v1/auth/session/{key}").status_code == 404
+
+
+def test_staff_has_no_output_access(client, tenants):
+    from core.auth import create_user
+    create_user("staff_u", "StaffUser1234!", role="staff", namespace=None)
+    h = _login(client, "staff_u", "StaffUser1234!")
+    oid = tenants["other"].id
+    assert client.get("/api/v1/outputs", headers=h).status_code == 403
+    assert client.get(f"/api/v1/outputs/{oid}", headers=h).status_code == 403
+    assert client.get(f"/api/v1/outputs/{oid}/content", headers=h).status_code == 403
+    assert client.delete(f"/api/v1/outputs/{oid}", headers=h).status_code == 403
+    assert client.post("/api/v1/outputs", headers=h, json={"namespace": "ns-b", "title": "x", "content": "y"}).status_code == 403
+    assert client.get("/api/v1/outputs/search?q=b", headers=h).status_code == 403

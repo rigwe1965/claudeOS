@@ -3,8 +3,14 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, Response
 
-from core.auth import require_auth, require_write, effective_namespace, can_access_namespace, is_scoped
-require_api_key = require_auth  # alias
+from core.auth import require_auth, require_role, require_write, effective_namespace, can_access_namespace, is_scoped
+
+_OUTPUT_ROLES = ("admin", "operator", "client", "viewer")  # staff is tickets-only; unknown roles fail closed
+
+
+def require_api_key(f):
+    """Authenticate, then reject roles with no output access (checked on every route)."""
+    return require_auth(require_role(*_OUTPUT_ROLES)(f))
 
 outputs_bp = Blueprint("outputs", __name__, url_prefix="/api/v1/outputs")
 
