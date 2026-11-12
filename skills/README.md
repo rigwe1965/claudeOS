@@ -23,7 +23,17 @@ On Windows PowerShell:
 Copy-Item -Recurse claudeos-* "$env:USERPROFILE\.claude\skills\"
 ```
 
-For one project only, copy the folders into `<project>/.claude/skills/` instead. Then ask for what the skill does, for example "review app.py", "research how X is governed", or "give me a research digest on X".
+For one project only, copy the folders into `<project>/.claude/skills/` instead.
+
+## Use
+
+Ask in plain words:
+
+- "Review app.py for problems" (`claudeos-qa-review`)
+- "Research how X is governed" (`claudeos-deep-research`)
+- "Give me an executive summary briefing on X" (`claudeos-research-digest`)
+
+An agent decides for itself whether a skill fits a request, so a vague or very simple question may be answered without one. To be certain, name it: "Use the claudeos-qa-review skill to review app.py". In Claude Code you can also type `/claudeos-qa-review`.
 
 ## What they do not do
 
@@ -35,6 +45,8 @@ For one project only, copy the folders into `<project>/.claude/skills/` instead.
 ## Tested
 
 Each skill was run in a clean Claude Code session before release: the QA review found every planted problem in a test file (SQL injection, command injection, path traversal, a hardcoded key, a swallowed exception) with correct line numbers and did not repeat the key; the research skill returned every section, labelled its facts and separated pages it read in full from search snippets; the digest kept its summary under 300 words with exactly three actions.
+
+Whether an agent picks a skill without being told depends on its description, so that was measured too, in a fresh project with the skills installed from this repository. For "Review app.py for problems", the reviewer was used in 4 of 4 runs with the current description (0 of 4 with the first, more passive wording). "Research how the Model Context Protocol is governed" and "Give me an executive summary briefing on how the Model Context Protocol is governed" each used their skill. A plain factual question ("find out what X is") is answered directly without the research skill, which is intended. These are small samples on one agent (Claude Code), not a guarantee.
 
 ## License
 

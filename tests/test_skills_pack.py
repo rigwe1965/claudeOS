@@ -34,6 +34,9 @@ def test_frontmatter(name):
     fm = {k.strip(): v.strip() for k, v in _frontmatter(_read(name)).items()}
     assert fm["name"] == name, "the name must equal the folder name"
     assert 40 < len(fm["description"]) <= 1024
+    # An agent only picks a skill without being told when its description says plainly when to use it. Measured: the passive
+    # wording used before triggered the reviewer 0 of 4 times on "Review app.py for problems"; this wording, 4 of 4.
+    assert fm["description"].startswith("Use this skill whenever"), "keep the description assertive so the skill is chosen"
     assert fm["license"] == "MIT"
     assert fm["allowed-tools"], "every skill must declare the tools it needs"
 

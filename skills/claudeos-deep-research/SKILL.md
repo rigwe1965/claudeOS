@@ -1,6 +1,6 @@
 ---
 name: claudeos-deep-research
-description: Deep, source-backed research on a topic using live web search. Breaks the question into angles, reads the best sources in full, cross-checks them, and returns a structured report with every fact labelled CONFIRMED, INFERRED or UNVERIFIED and a numbered source list. Use when asked to research, investigate, fact-check or find the latest on a topic.
+description: Use this skill whenever the user asks to research, investigate, fact-check or find out about a topic that needs current or verifiable information from the web, even if they just say 'look into' or 'find out'. It searches several angles, reads the best sources in full, labels every fact CONFIRMED, INFERRED or UNVERIFIED, and returns a report with numbered sources and an explicit list of knowledge gaps.
 allowed-tools: WebSearch, WebFetch, Read
 license: MIT
 ---

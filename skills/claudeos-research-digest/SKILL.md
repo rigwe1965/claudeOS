@@ -1,6 +1,6 @@
 ---
 name: claudeos-research-digest
-description: A two-step research workflow. Runs a deep, source-backed investigation of a topic, then condenses it into a one-page executive summary (TL;DR line, under 300 words) with three recommended next actions. Use when asked for a research digest, briefing or executive summary on a topic.
+description: Use this skill whenever the user asks for a research digest, briefing or executive summary about a topic that needs web research. It runs a deep, source-backed investigation first, then condenses it into a one-page summary of under 300 words with a TL;DR line, the key findings with confidence labels, and exactly three recommended next actions.
 allowed-tools: WebSearch, WebFetch, Read, Write
 license: MIT
 ---
