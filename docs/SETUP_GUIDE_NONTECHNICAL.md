@@ -84,9 +84,13 @@ You will see a lot of text scrolling. When it stops and you see a `>` prompt aga
    ```
    ANTHROPIC_API_KEY=sk-ant-YOUR-KEY-HERE
    ```
-5. Find the line `CLAUDEOS_SECRET_KEY=` and type any long random phrase (at least 32 characters):
+5. Make your own secret key. It protects every login, so it must be random and **must not be copied from an example**. Click the Start menu, type `PowerShell`, open it, paste this one line and press Enter:
    ```
-   CLAUDEOS_SECRET_KEY=my-super-secret-key-for-faiykeOS-2026
+   $b = New-Object byte[] 32; (New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })
+   ```
+   It prints 64 letters and numbers. Copy them, then find the line `CLAUDEOS_SECRET_KEY=` in `.env` and paste them after the `=` (no spaces, no quotes). Keep a copy somewhere safe, such as a password manager: if you lose it, everyone has to sign in again.
+   ```
+   CLAUDEOS_SECRET_KEY=paste-the-64-characters-here
    ```
 6. Find (or add) the line `SCHEDULER_TIMEZONE=` and set it to your local timezone:
    ```
