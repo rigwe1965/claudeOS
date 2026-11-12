@@ -284,10 +284,12 @@ def _validate_pagination(limit: int, maximum: int, offset: int = 0) -> None:
 
 
 def _safe_path_segment(s: str) -> str:
-    """Strip path separators and dotdot sequences, bound length."""
+    """Make one folder name from untrusted text: no separators, no dotdot, no control or line-break characters,
+    none of the characters Windows forbids in a name, no trailing dot or space; bounded length."""
     s = re.sub(r'[/\\]', '_', s)   # no separators
+    s = re.sub(r'[\x00-\x1f\x7f-\x9f  <>:"|?*]', '_', s)   # control, line-break and Windows-forbidden characters
     s = re.sub(r'\.\.', '', s)      # no dotdot
-    return s[:64] or "unknown"
+    return s[:64].rstrip('. ') or "unknown"
 
 
 def _write_file(output_id: str, namespace: str, output_type: str, format: str, content: str) -> Path:

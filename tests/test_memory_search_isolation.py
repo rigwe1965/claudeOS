@@ -19,8 +19,9 @@ def search_data(memory_env, fresh_db, monkeypatch, tmp_path):
     from vault.schemas import NamespaceCreate
 
     monkeypatch.setattr(manager, "VAULT_ROOT", tmp_path / "vault")
-    for slug in ("ns-a", "ns_a"):
-        manager.create_namespace(NamespaceCreate(slug=slug, display_name=slug))
+    # Only "ns-a" is a real namespace: slugs are letters, digits and hyphens since the path-traversal fix, so the lookalike
+    # "ns_a" below cannot be provisioned. It is still written to the memory store, which is the point of the test.
+    manager.create_namespace(NamespaceCreate(slug="ns-a", display_name="ns-a"))
 
     def write(namespace, key, **kwargs):
         return store.write(MemoryEntryCreate(
