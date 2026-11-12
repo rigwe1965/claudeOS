@@ -319,6 +319,68 @@ def test_api_get_agent_not_found(client, auth_headers):
     assert r.status_code == 404
 
 
+@pytest.mark.parametrize("namespace", ["global", "ns-a"])
+@pytest.mark.parametrize("permissions", [[], ["read"]])
+@pytest.mark.parametrize("method", ["GET", "HEAD", "POST"])
+@pytest.mark.parametrize("save_output", [False, True])
+def test_api_read_only_key_cannot_stream(client, monkeypatch, namespace, permissions, method, save_output):
+    from agents import executor
+    from core.api.auth import create_api_key
+    from core.database import get_db
+
+    raw_key, _ = create_api_key("read-only", permissions=permissions, namespace=namespace)
+    headers = {"X-API-Key": raw_key}
+    assert client.get("/api/v1/agents", headers=headers).status_code == 200
+    mocks = []
+    for name in ("create_run_record", "execute_stream", "_save_output"):
+        mock = MagicMock(side_effect=AssertionError("Read-only key reached agent execution"))
+        monkeypatch.setattr(executor, name, mock)
+        mocks.append(mock)
+    data = {"prompt": "test", "namespace": namespace, "save_output": save_output}
+    kwargs = {"json": data} if method == "POST" else {
+        "query_string": {**data, "save_output": str(save_output).lower()}
+    }
+    response = client.open("/api/v1/agents/briefing-agent/stream", method=method,
+                           headers=headers, buffered=True, **kwargs)
+
+    assert response.status_code == 403
+    if method != "HEAD":
+        assert response.json == {"error": "API key is read-only"}
+    for mock in mocks:
+        mock.assert_not_called()
+    with get_db() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM agent_runs").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM outputs").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("namespace", ["global", "ns-a"])
+@pytest.mark.parametrize("permissions", [["write"], ["read", "write"]])
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_api_writable_key_can_stream(client, monkeypatch, namespace, permissions, method):
+    from agents import executor
+    from core.api.auth import create_api_key
+    from core.database import get_db
+
+    raw_key, _ = create_api_key("writable", permissions=permissions, namespace=namespace)
+    execute = MagicMock(return_value=iter(["Test output", {"_done": True, "tokens_in": 1, "tokens_out": 2}]))
+    monkeypatch.setattr(executor, "execute_stream", execute)
+    monkeypatch.setattr(executor._bg_pool, "submit", MagicMock())
+    data = {"prompt": "test", "namespace": "global"}
+    kwargs = {"json": data} if method == "POST" else {"query_string": data}
+    response = client.open("/api/v1/agents/briefing-agent/stream", method=method,
+                           headers={"X-API-Key": raw_key}, buffered=True, **kwargs)
+
+    assert response.status_code == 200
+    events = [json.loads(line[6:]) for line in response.get_data(as_text=True).splitlines()
+              if line.startswith("data: ")]
+    assert [event["type"] for event in events] == ["token", "done"]
+    assert execute.call_args.kwargs["namespace"] == namespace
+    with get_db() as conn:
+        run = conn.execute("SELECT * FROM agent_runs WHERE id = ?", (events[-1]["run_id"],)).fetchone()
+    assert run["status"] == "done"
+    assert run["namespace"] == namespace
+
+
 def test_api_run_agent(client, auth_headers):
     from agents import executor
     mock_client = MagicMock()

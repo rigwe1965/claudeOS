@@ -67,9 +67,14 @@ def test_semantic_search_skips_archived(fresh_db):
 
 def test_rewriting_archived_key_revives_it(fresh_db):
     from memory import store
+    from core.database import get_db
     first = _write("acme", "plan.x", "old")
     _archive(first.id)
+    with get_db() as conn:  # the precondition: it really is archived now
+        assert conn.execute("SELECT archived FROM memory_entries WHERE id=?", (first.id,)).fetchone()[0] == 1
 
     again = _write("acme", "plan.x", "new")
     assert again.id == first.id
+    with get_db() as conn:  # the rewrite itself must clear the flag, not just show up in a list
+        assert conn.execute("SELECT archived FROM memory_entries WHERE id=?", (first.id,)).fetchone()[0] == 0
     assert [e.id for e in store.list_entries(namespace="acme")] == [first.id]

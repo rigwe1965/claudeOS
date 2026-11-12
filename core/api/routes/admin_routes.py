@@ -300,7 +300,7 @@ def list_sessions():
             """SELECT s.id, s.user_id, u.username, s.ip_address, s.user_agent,
                       s.expires_at, s.created_at, s.last_used_at, s.revoked
                FROM user_sessions s JOIN users u ON s.user_id = u.id
-               WHERE s.revoked = 0 AND s.expires_at > CURRENT_TIMESTAMP
+               WHERE s.revoked = 0 AND julianday(s.expires_at) > julianday('now')
                ORDER BY s.created_at DESC"""
         ).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -351,11 +351,16 @@ def create_api_key():
     name        = (body.get("name") or "").strip()
     namespace   = body.get("namespace", "global")
     permissions = body.get("permissions", ["read", "write"])
+    if permissions is None:
+        permissions = ["read", "write"]
 
     if not name:
         return jsonify({"error": "name required"}), 400
 
-    raw_key, key_id = _create(name, permissions, namespace)
+    try:
+        raw_key, key_id = _create(name, permissions, namespace)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 422
     audit_log("api_key_created", user_id=g.user_id, username=g.username, namespace=namespace, detail={"name": name})
     return jsonify({"raw_key": raw_key, "id": key_id, "name": name, "namespace": namespace,
                     "permissions": permissions, "warning": "Copy this key — it will not be shown again"}), 201

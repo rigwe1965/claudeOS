@@ -16,6 +16,7 @@ import html as _html
 import logging
 import os
 import smtplib
+import ssl
 import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -54,14 +55,15 @@ def send_email(to: str, subject: str, body_html: str) -> bool:
         msg["To"]      = to
         msg.attach(MIMEText(body_html, "html", "utf-8"))
 
+        context = ssl.create_default_context()
         if port == 465:
-            with smtplib.SMTP_SSL(host, port, timeout=10) as smtp:
+            with smtplib.SMTP_SSL(host, port, timeout=10, context=context) as smtp:
                 smtp.login(user, pwd)
                 smtp.sendmail(frm, [to], msg.as_string())
         else:
             with smtplib.SMTP(host, port, timeout=10) as smtp:
                 smtp.ehlo()
-                smtp.starttls()
+                smtp.starttls(context=context)
                 smtp.login(user, pwd)
                 smtp.sendmail(frm, [to], msg.as_string())
 

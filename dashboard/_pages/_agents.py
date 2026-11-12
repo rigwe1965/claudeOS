@@ -877,11 +877,11 @@ body{{background:transparent;padding:0 0 8px 0;}}
 
 def _render_catalog_tab(agents: list, api_get, api_post):
     import streamlit.components.v1 as _cv1
-    from dashboard.components.brand import _mix, get_theme
+    from dashboard.components.brand import _mix, get_theme, get_ns_brand
     tv = get_theme_vars()
 
     # Brand-aware card colors — override ClaudeOS green SURFACE for namespace clients
-    _ns_brand = st.session_state.get("ns_brand") or {}
+    _ns_brand = get_ns_brand()
     _brand_color = (_ns_brand.get("color") or "").strip()
     if _brand_color:
         _is_dark = (get_theme() == "dark")

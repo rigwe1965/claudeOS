@@ -6,12 +6,33 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field, field_validator
 
 _HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+BRAND_COLOR_FIELDS = (
+    "color", "accent_color", "bg_color", "hover_color", "surface_color",
+    "surface2_color", "text_color", "text_muted_color", "border_color", "input_bg",
+)
 
 
-def validate_brand_fields(color: Any = None, icon: Any = None, accent: Any = None) -> Optional[str]:
+def is_brand_color(value: Any) -> bool:
+    return isinstance(value, str) and _HEX_COLOR.fullmatch(value) is not None
+
+
+def safe_brand_colors(brand: dict) -> dict:
+    """Discard unsafe legacy/session colors before CSS, HTML or JS rendering."""
+    return {
+        key: value for key, value in brand.items()
+        if key not in BRAND_COLOR_FIELDS or value in (None, "") or is_brand_color(value)
+    }
+
+
+def validate_brand_fields(color: Any = None, icon: Any = None, accent: Any = None,
+                          *, metadata: Any = None) -> Optional[str]:
     """Return an error message if a branding value is unsafe to inject into CSS/HTML."""
-    for name, val in (("color", color), ("accent_color", accent)):
-        if val not in (None, "") and not (isinstance(val, str) and _HEX_COLOR.match(val)):
+    if metadata is not None and not isinstance(metadata, dict):
+        return "metadata must be an object"
+    colors = [("color", color), ("accent_color", accent)]
+    colors.extend((key, val) for key, val in (metadata or {}).items() if key in BRAND_COLOR_FIELDS)
+    for name, val in colors:
+        if val not in (None, "") and not is_brand_color(val):
             return f"{name} must be a #RRGGBB hex value"
     if icon is not None and (not isinstance(icon, str) or len(icon) > 8 or any(c in icon for c in "<>&\"'`")):
         return "icon must be a short emoji or symbol"
@@ -40,6 +61,14 @@ class NamespaceCreate(BaseModel):
     @classmethod
     def _check_icon(cls, v):
         err = validate_brand_fields(icon=v)
+        if err:
+            raise ValueError(err)
+        return v
+
+    @field_validator("metadata")
+    @classmethod
+    def _check_metadata(cls, v):
+        err = validate_brand_fields(metadata=v)
         if err:
             raise ValueError(err)
         return v
