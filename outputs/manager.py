@@ -287,7 +287,7 @@ def _safe_path_segment(s: str) -> str:
     """Make one folder name from untrusted text: no separators, no dotdot, no control or line-break characters,
     none of the characters Windows forbids in a name, no trailing dot or space; bounded length."""
     s = re.sub(r'[/\\]', '_', s)   # no separators
-    s = re.sub(r'[\x00-\x1f\x7f-\x9f  <>:"|?*]', '_', s)   # control, line-break and Windows-forbidden characters
+    s = re.sub(r'[\x00-\x1f\x7f-\x9f\u2028\u2029<>:"|?*]', '_', s)   # control, line-break and Windows-forbidden characters
     s = re.sub(r'\.\.', '', s)      # no dotdot
     return s[:64].rstrip('. ') or "unknown"
 

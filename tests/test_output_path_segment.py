@@ -9,7 +9,7 @@ from outputs.manager import _safe_path_segment
 
 
 @pytest.mark.parametrize("raw", [
-    "a\nb", "a\rb", "a\x00b", "a\x1bb", "a\x1cb", "a\x85b", "a b", "a b", "a\x7fb",
+    "a\nb", "a\rb", "a\x00b", "a\x1bb", "a\x1cb", "a\x85b", "a\u2028b", "a\u2029b", "a\x7fb",
 ])
 def test_control_and_line_break_characters_are_replaced(raw):
     out = _safe_path_segment(raw)
@@ -51,3 +51,24 @@ def test_trailing_dot_and_space_are_removed_because_windows_drops_them():
 
 def test_length_is_bounded():
     assert len(_safe_path_segment("x" * 500)) == 64
+
+
+# --- no invisible characters in source files ---------------------------------------------------------------------------
+# A literal U+2028 or U+2029 typed into a Python file is invisible to a reviewer and makes str.splitlines() count an extra line.
+# Write them as escapes (backslash, u, 2028) instead. The characters are built with chr() so this file contains none itself.
+HIDDEN = {chr(c) for c in (0x2028, 0x2029, 0x200B, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069)}
+
+
+def test_no_hidden_unicode_characters_in_python_sources():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    skip = {".venv", "venv", "node_modules", "dist", "data", ".git"}
+    offenders = {}
+    for path in root.rglob("*.py"):
+        if skip & set(path.relative_to(root).parts):
+            continue
+        found = sorted({hex(ord(ch)) for ch in path.read_text(encoding="utf-8", errors="ignore") if ch in HIDDEN})
+        if found:
+            offenders[str(path.relative_to(root))] = found
+    assert not offenders, f"invisible characters in source (write them as escapes): {offenders}"
