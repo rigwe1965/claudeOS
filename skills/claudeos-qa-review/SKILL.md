@@ -1,6 +1,6 @@
 ---
 name: claudeos-qa-review
-description: Structured code review for bugs, security issues and quality problems. Checks the OWASP Top 10, hardcoded secrets, error handling and dead code, and returns a severity-ranked table with the exact fix for each finding. Use when asked to review, audit or QA code, a file, a diff or a pull request.
+description: Use this skill whenever the user asks to review, audit, check or QA code for bugs, security vulnerabilities, hardcoded secrets or quality problems, even if they only name one file or just say to look for problems. Produces a severity-ranked findings table (CRITICAL to INFO) with file, line and the exact fix for each, then a PASS or FAIL verdict. Read-only: it never edits files.
 allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git log:*), Bash(git show:*)
 license: MIT
 ---
