@@ -211,7 +211,8 @@ def search_semantic(
                 WHERE id IN ({placeholders})
                   AND namespace = ?
                   AND confidence >= ?
-                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)""",
+                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                  AND (archived IS NULL OR archived = 0)""",
             (*memory_ids, namespace, min_confidence),
         ).fetchall()
     from memory.store import _row_to_entry
