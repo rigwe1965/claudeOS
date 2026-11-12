@@ -224,6 +224,10 @@ pip install mcp uvicorn openai-whisper
 
 Note: first voice transcription downloads ~140 MB Whisper model automatically.
 
+## Standalone skills
+
+Three of ClaudeOS's agents and workflows are packaged as standalone skills that run inside Claude Code and other agents that read `SKILL.md`, with no server or account needed: a read-only code review, deep web research with labelled evidence, and a research digest. See [`skills/`](skills/README.md) for what each one does, the tools it asks for and how to install it.
+
 ## API Reference
 
 | Method | Endpoint | Description |
@@ -303,6 +307,10 @@ Models are chosen in one place, `core/models.py`, and every agent run, eval and 
 | `ChromaDB warmup FAILED` in `logs/api.log` | Semantic search is off and memory falls back to keyword search. Check the warning above it; the index rebuild above fixes the `_type` case. |
 | Dashboard is down after `scripts/start.ps1` | On Windows PowerShell 5.1 a Streamlit warning on stderr can make the script exit and stop Streamlit. Start it directly: `.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.port 8501 --server.headless true` |
 | Usage page shows Avg Quality `0.0/5` | No scored runs yet (scoring is sampled and async). Run a few agents and wait ~10 seconds. |
+
+## Need it set up for your business?
+
+[Book a call](https://cal.com/romanus-ikechukwu-igwe-nvk1n5/faiyke) to talk about running ClaudeOS (FaiykeOS) for your team.
 
 ## Brand
 
