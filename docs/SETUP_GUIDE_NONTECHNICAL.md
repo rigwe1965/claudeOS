@@ -225,7 +225,7 @@ Then open `http://localhost:8501` in your browser.
 
 If you are stuck at any step:
 
-- **Email:** hello@facyke.com
+- **Email:** info@facyke.com
 - **Subject:** `FacykeOS Setup Help`
 - **Tell us:** which step number you are on, and paste any error message shown in the command window
 

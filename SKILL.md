@@ -649,7 +649,7 @@ Every deployment built by this skill includes all of the following. Nothing is c
 | Pricing tiers | Developer $197 one-time \| Business $997 + $147/mo \| Agency $497 + $97/mo or $997 flat unlimited |
 | Buyer collateral | `docs/PRODUCT_README.md`, `docs/SETUP_GUIDE_NONTECHNICAL.md`, `docs/AGENCY_LICENSE.md` |
 | Distribution ZIP | `scripts/build_package.py` → `dist/FacykeOS-v17.3.zip`; excludes .env, data/, logs/, dev scripts |
-| Replacements needed | Update `hello@facyke.com` email + Formspree form ID in landing/pricing HTML before distributing |
+| Replacements needed | Update `info@facyke.com` email + Formspree form ID in landing/pricing HTML before distributing |
 
 ### Authentication & Roles
 | Role | Access |

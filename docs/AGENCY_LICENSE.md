@@ -1,7 +1,7 @@
 # FacykeOS — Agency License Agreement
 
-**Licensor:** facyke-ai  
-**Contact:** hello@facyke.com  
+**Licensor:** facyke  
+**Contact:** info@facyke.com  
 **Version:** 17.0  
 **Effective:** Upon purchase of the Agency License
 
@@ -24,7 +24,7 @@ By purchasing the FacykeOS Agency License, you (the "Agency") receive:
 1. **You may not resell or redistribute the FacykeOS source code itself** as a standalone product, package, download, or repository. The code is licensed to you for deployment services — not for resale as software.
 2. **You may not sublicense this agency license** to other agencies or developers. Each agency requires its own license.
 3. **You may not remove copyright attributions** from internal code comments — though you may rebrand all user-visible text, UI elements, and documentation.
-4. **You may not represent FacykeOS as your own original creation** in any public documentation, product listing, or investor materials without written permission from facyke-ai.
+4. **You may not represent FacykeOS as your own original creation** in any public documentation, product listing, or investor materials without written permission from facyke.
 
 ---
 
@@ -49,9 +49,9 @@ If you purchased the **$497 + $97/mo plan** (not the flat unlimited plan):
 
 - Each active client namespace counts as one billable namespace.
 - A namespace is "active" if at least one agent run occurred in the billing month.
-- Billing is monthly, payable to facyke-ai via the agreed payment method.
+- Billing is monthly, payable to facyke via the agreed payment method.
 - Inactive namespaces (zero runs in 60+ days) are not counted.
-- Upgrade to the **$997 flat unlimited** plan at any time — contact hello@facyke.com.
+- Upgrade to the **$997 flat unlimited** plan at any time — contact info@facyke.com.
 
 ---
 
@@ -91,7 +91,7 @@ The FacykeOS source code, SKILL.md playbook, and technical documentation are **c
 
 ## 8. Disclaimer of Warranties
 
-FacykeOS is provided "as is." facyke-ai makes no warranty that the software will be error-free or uninterrupted. The agency is responsible for:
+FacykeOS is provided "as is." facyke makes no warranty that the software will be error-free or uninterrupted. The agency is responsible for:
 
 - Testing deployments before going live with clients
 - Maintaining their own server infrastructure
@@ -102,13 +102,13 @@ FacykeOS is provided "as is." facyke-ai makes no warranty that the software will
 
 ## 9. Limitation of Liability
 
-facyke-ai's total liability to any agency under this license shall not exceed the amount paid for the license. facyke-ai is not liable for any indirect, incidental, or consequential damages including loss of client data, revenue, or business.
+facyke's total liability to any agency under this license shall not exceed the amount paid for the license. facyke is not liable for any indirect, incidental, or consequential damages including loss of client data, revenue, or business.
 
 ---
 
 ## 10. Termination
 
-This license may be terminated by facyke-ai if:
+This license may be terminated by facyke if:
 
 - You materially breach the terms in Section 2 (prohibited uses)
 - You fail to pay per-client fees for 60+ days (where applicable)
@@ -127,9 +127,9 @@ This agreement is governed by the laws of Nigeria. Disputes shall be resolved by
 
 For licensing questions, payment changes, or upgrade requests:
 
-**Email:** hello@facyke.com  
+**Email:** info@facyke.com  
 **Subject:** `FacykeOS Agency License — [your question]`
 
 ---
 
-*This document constitutes the complete agency license agreement between facyke-ai and the purchasing agency. Purchasing the Agency License constitutes acceptance of these terms.*
+*This document constitutes the complete agency license agreement between facyke and the purchasing agency. Purchasing the Agency License constitutes acceptance of these terms.*

@@ -1,6 +1,6 @@
 # FacykeOS — Product Package
 
-**Version:** 17.3 | **Built by:** facyke-ai | **License:** See below
+**Version:** 17.3 | **Built by:** facyke | **License:** See below
 
 ---
 
@@ -272,7 +272,7 @@ See `docs/AGENCY_LICENSE.md` for full commercial terms.
 
 ## Support
 
-**Email:** hello@facyke.com  
+**Email:** info@facyke.com  
 **Subject line:** `FacykeOS Support — [brief description]`  
 **Include:** Your purchase reference, OS/Python version, exact error message, which page/feature
 
