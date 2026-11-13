@@ -35,7 +35,7 @@ NAMESPACES = [
     ),
     NamespaceCreate(
         slug="faiyke-ai",
-        display_name="Faiyke AI",
+        display_name="Facyke AI",
         description="AI product & SaaS development",
         type="client",
         color="#ff5a1f",

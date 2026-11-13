@@ -1,6 +1,6 @@
 # CLAUDE.md — ClaudeOS Project Rules
 
-ClaudeOS (commercial name **FaiykeOS**) — AI operating system: one authenticated control center over Claude agents, memory, workflows and tickets. Brand #407E3C green + white. Target: Windows 10 / PowerShell. Release history: `CHANGELOG.md`.
+ClaudeOS (commercial name **FacykeOS**) — AI operating system: one authenticated control center over Claude agents, memory, workflows and tickets. Brand #407E3C green + white. Target: Windows 10 / PowerShell. Release history: `CHANGELOG.md`.
 
 ## Architecture
 ```
@@ -24,7 +24,7 @@ Start: `.\scripts\start.ps1` (Flask + Streamlit, uses `.venv`), `.\scripts\start
 - `core/api/routes/agents.py` — agents REST, SSE stream, output save on stream
 - `dashboard/app.py` auth gate + role nav · `components/brand.py` CSS/theme · `components/proxy.py` hidden proxy buttons · `_pages/_agents.py` chat/catalog/runs
 - `core/notifications.py` — smtplib, fire-and-forget; `core/backup.py` — daily VACUUM INTO, 7 kept
-- `scripts/`: `build_package.py` (→ gitignored `dist/FaiykeOS-v17.3.zip`), `reindex_vectors.py`, `seed_client_schema.py`, `create_admin.py`
+- `scripts/`: `build_package.py` (→ gitignored `dist/FacykeOS-v17.3.zip`), `reindex_vectors.py`, `seed_client_schema.py`, `create_admin.py`
 
 ## Hard rules
 - Windows: waitress (never gunicorn); no `&&` in PowerShell (use `;`); always `encoding='utf-8'` on file I/O.

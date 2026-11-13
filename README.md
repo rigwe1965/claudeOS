@@ -310,7 +310,7 @@ Models are chosen in one place, `core/models.py`, and every agent run, eval and 
 
 ## Need it set up for your business?
 
-[Book a call](https://cal.com/romanus-ikechukwu-igwe-nvk1n5/faiyke) to talk about running ClaudeOS (FaiykeOS) for your team.
+[Book a call](https://cal.com/romanus-ikechukwu-igwe-nvk1n5/faiyke) to talk about running ClaudeOS (FacykeOS) for your team.
 
 ## Brand
 

@@ -1,4 +1,4 @@
-# FaiykeOS — Setup Guide for Business Owners
+# FacykeOS — Setup Guide for Business Owners
 **No technical experience required. Follow each step in order.**
 
 ---
@@ -12,9 +12,9 @@ Gather these four things before beginning:
 | A computer or server | You already have this | — |
 | An Anthropic API key | console.anthropic.com → Create account → API Keys | Free to create; pay per use |
 | Python 3.11 installed | python.org/downloads | Free |
-| FaiykeOS files | Provided after purchase | Included |
+| FacykeOS files | Provided after purchase | Included |
 
-> **Tip:** If you have a Windows laptop or PC, you can run FaiykeOS on it today. You do not need a special server to get started.
+> **Tip:** If you have a Windows laptop or PC, you can run FacykeOS on it today. You do not need a special server to get started.
 
 ---
 
@@ -23,7 +23,7 @@ Gather these four things before beginning:
 1. Go to **console.anthropic.com** in your browser
 2. Click **Sign Up** and create an account
 3. Once logged in, click **API Keys** in the left menu
-4. Click **Create Key** — give it a name like `FaiykeOS`
+4. Click **Create Key** — give it a name like `FacykeOS`
 5. **Copy the key and save it somewhere safe** — it starts with `sk-ant-`
 6. Add a payment method in **Billing** (you only pay for what you use — typically $5–$20/month for a small team)
 
@@ -45,16 +45,16 @@ Gather these four things before beginning:
 
 ---
 
-## Part 3 — Set Up the FaiykeOS Files
+## Part 3 — Set Up the FacykeOS Files
 
-1. Extract the FaiykeOS ZIP file you received — put it in a folder you can find easily, like `C:\FaiykeOS\`
+1. Extract the FacykeOS ZIP file you received — put it in a folder you can find easily, like `C:\FacykeOS\`
 2. Open the folder — you should see files like `requirements.txt`, `CLAUDE.md`, and folders like `agents/`, `dashboard/`, `core/`
 
 ---
 
 ## Part 4 — Open a Command Window Inside the Folder
 
-1. In File Explorer, navigate to your FaiykeOS folder
+1. In File Explorer, navigate to your FacykeOS folder
 2. Click in the address bar at the top (where it shows the folder path)
 3. Type `cmd` and press Enter
 4. A black command window opens already in the right folder
@@ -77,7 +77,7 @@ You will see a lot of text scrolling. When it stops and you see a `>` prompt aga
 
 ## Part 6 — Create Your Settings File
 
-1. In File Explorer, find the file called `.env.example` inside the FaiykeOS folder
+1. In File Explorer, find the file called `.env.example` inside the FacykeOS folder
 2. Copy it and rename the copy to `.env` (remove the word "example")
 3. Right-click `.env` → Open with → Notepad
 4. Find the line that says `ANTHROPIC_API_KEY=` and paste your key after the `=`:
@@ -142,7 +142,7 @@ Write down your username and password — you will need them to log in.
 
 ---
 
-## Part 9 — Start FaiykeOS
+## Part 9 — Start FacykeOS
 
 ```
 .\scripts\start.ps1
@@ -160,7 +160,7 @@ Open your web browser (Chrome, Edge, or Firefox) and go to:
 http://localhost:8501
 ```
 
-The FaiykeOS login page appears. Enter the username and password you created in Part 8.
+The FacykeOS login page appears. Enter the username and password you created in Part 8.
 
 **You are in!** 🎉
 
@@ -194,9 +194,9 @@ Now every agent knows your business name automatically.
 
 ---
 
-## Starting FaiykeOS After Restart
+## Starting FacykeOS After Restart
 
-Every time you restart your computer, you need to start FaiykeOS again. Open a command window in your FaiykeOS folder and run:
+Every time you restart your computer, you need to start FacykeOS again. Open a command window in your FacykeOS folder and run:
 
 ```
 .\scripts\start.ps1
@@ -216,7 +216,7 @@ Then open `http://localhost:8501` in your browser.
 | "Invalid credentials" at login | Check you typed your username and password correctly |
 | Agent gives no response | Check your Anthropic API key in `.env` is correct and has billing set up |
 | Page shows error after restart | Run `.\scripts\start.ps1` again |
-| Agents show "running" but never finish | This cleans up automatically on next restart — FaiykeOS resets any stuck runs when it starts |
+| Agents show "running" but never finish | This cleans up automatically on next restart — FacykeOS resets any stuck runs when it starts |
 | Scheduled workflows fire at wrong time | Set `SCHEDULER_TIMEZONE=` in your `.env` file to match your local timezone (see Part 6) |
 
 ---
@@ -225,8 +225,8 @@ Then open `http://localhost:8501` in your browser.
 
 If you are stuck at any step:
 
-- **Email:** hello@faiyke-ai.com
-- **Subject:** `FaiykeOS Setup Help`
+- **Email:** hello@facyke.com
+- **Subject:** `FacykeOS Setup Help`
 - **Tell us:** which step number you are on, and paste any error message shown in the command window
 
 We respond within 24 hours on business days.

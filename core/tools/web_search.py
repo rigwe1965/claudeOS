@@ -502,7 +502,7 @@ def _wikipedia_search(query: str, num_results: int = 2) -> list[dict]:
         import requests
         resp = requests.get(
             "https://en.wikipedia.org/w/api.php",
-            headers={"User-Agent": "ClaudeOS/1.0 (internal research tool; contact@faiyke.ai)"},
+            headers={"User-Agent": "ClaudeOS/1.0 (internal research tool; hello@facyke.com)"},
             params={
                 "action": "query",
                 "list": "search",
