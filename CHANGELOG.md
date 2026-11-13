@@ -1,8 +1,14 @@
 # Changelog
 
-All notable changes to ClaudeOS / FaiykeOS. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+All notable changes to ClaudeOS / FacykeOS. Follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
+
+## [Unreleased] — 2026-11-13 — Product renamed FaiykeOS → FacykeOS
+
+### Changed
+- Commercial name `FaiykeOS` → `FacykeOS` in docs, landing pages, licence, and `scripts/build_package.py` (zip is now `dist/FacykeOS-v{VERSION}.zip`). Contact address is now `info@facyke.com`. Older entries below keep the old name as history.
+- Deliberately unchanged: the internal namespace slugs `faiyke` / `faiyke-ai`, the `*_faiyke_*` helper scripts, and the cal.com booking link. Renaming slugs would need a database migration.
 
 ## [Unreleased] — 2026-10-17 — Models, Scoring & Search Hardening
 

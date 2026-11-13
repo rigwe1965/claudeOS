@@ -1,4 +1,4 @@
-# ClaudeOS / FaiykeOS — Security Audit
+# ClaudeOS / FacykeOS — Security Audit
 
 **Date:** 2026-10-17  **Commit audited:** `4f697ae` (`main`, clean tree)  **Method:** manual static review + read-only checks of the local repo, git history, GitHub (read-only API) and the local SQLite DB.
 **Scale:** Importance 1–10 (10 = critical). Critical 9–10 · High 7–8 · Medium 4–6 · Low 1–3.

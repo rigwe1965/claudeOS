@@ -1,19 +1,19 @@
-# FaiykeOS — Product Package
+# FacykeOS — Product Package
 
-**Version:** 17.3 | **Built by:** faiyke-ai | **License:** See below
+**Version:** 17.3 | **Built by:** facyke | **License:** See below
 
 ---
 
 ## What You Are Getting
 
-FaiykeOS is a complete, self-hosted AI Operating System. This package contains everything needed to deploy 12 specialist AI agents, long-term memory, automated workflows, a ticketing system, and a full observability stack on your own server.
+FacykeOS is a complete, self-hosted AI Operating System. This package contains everything needed to deploy 12 specialist AI agents, long-term memory, automated workflows, a ticketing system, and a full observability stack on your own server.
 
 ---
 
 ## Package Contents
 
 ```
-FaiykeOS/
+FacykeOS/
 ├── agents/
 │   ├── definitions/          ← 12 YAML agent definitions (customisable)
 │   ├── executor.py           ← Claude API wrapper, streaming, eval trigger
@@ -272,8 +272,8 @@ See `docs/AGENCY_LICENSE.md` for full commercial terms.
 
 ## Support
 
-**Email:** hello@faiyke-ai.com  
-**Subject line:** `FaiykeOS Support — [brief description]`  
+**Email:** info@facyke.com  
+**Subject line:** `FacykeOS Support — [brief description]`  
 **Include:** Your purchase reference, OS/Python version, exact error message, which page/feature
 
 Response within 24 hours (business days).

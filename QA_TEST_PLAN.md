@@ -768,7 +768,7 @@ SECTION 15 — MODELS, SCORING & SEMANTIC SEARCH
 python scripts/build_package.py
 ```
 **Expected output:**
-- `dist/FaiykeOS-v17.3.zip` created (version comes from `VERSION` in `scripts/build_package.py`)
+- `dist/FacykeOS-v17.3.zip` created (version comes from `VERSION` in `scripts/build_package.py`)
 - Console shows: `Package built: …`, size, `Files included`, `Files skipped`
 
 **Fail signals:** Python error, zip not created, size 0 KB
@@ -777,7 +777,7 @@ python scripts/build_package.py
 ```powershell
 python -c "
 import zipfile
-z = zipfile.ZipFile('dist/FaiykeOS-v17.3.zip')
+z = zipfile.ZipFile('dist/FacykeOS-v17.3.zip')
 names = z.namelist()
 bad = [n for n in names if '.env' in n and 'example' not in n]
 print('Secret leaks:', bad if bad else 'NONE')
@@ -796,7 +796,7 @@ print('Has requirements:', any('requirements.txt' in n for n in names))
 ```powershell
 python -c "
 import zipfile
-z = zipfile.ZipFile('dist/FaiykeOS-v17.3.zip')
+z = zipfile.ZipFile('dist/FacykeOS-v17.3.zip')
 dev = [n for n in z.namelist() if any(s in n for s in ['debug_namespaces','delete_faiyke','fix_faiyke','seed_faiyke','build_package'])]
 print('Dev scripts leaked:', dev if dev else 'NONE')
 "
@@ -805,7 +805,7 @@ print('Dev scripts leaked:', dev if dev else 'NONE')
 
 ### 14.4 Landing Pages Load
 1. Open `docs/landing/index.html` in browser (double-click or `start`)
-2. **Expected:** Hero loads with green gradient, "FaiykeOS" heading visible, no broken CSS
+2. **Expected:** Hero loads with green gradient, "FacykeOS" heading visible, no broken CSS
 3. Open `docs/landing/pricing.html`
 4. **Expected:** 3 pricing cards visible ($197 / $997+$147mo / $497+$97mo), comparison table renders
 

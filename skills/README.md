@@ -1,6 +1,6 @@
 # ClaudeOS skills
 
-Three small skills taken from the agents and workflows of ClaudeOS (FaiykeOS), rewritten to run inside Claude Code and any agent that reads the `SKILL.md` format. They need nothing else from ClaudeOS: no server, no database, no account.
+Three small skills taken from the agents and workflows of ClaudeOS (FacykeOS), rewritten to run inside Claude Code and any agent that reads the `SKILL.md` format. They need nothing else from ClaudeOS: no server, no database, no account.
 
 | Skill | What it does | Tools it asks for |
 |---|---|---|

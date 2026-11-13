@@ -169,7 +169,7 @@ Create the following directory structure in the current working directory:
 │   ├── seed_client_schema.py   ← pre-populate 14 onboarding fields per namespace
 │   ├── seed_namespaces.py
 │   ├── seed_workflows.py
-│   ├── build_package.py        ← builds dist/FaiykeOS-v17.3.zip for distribution
+│   ├── build_package.py        ← builds dist/FacykeOS-v17.3.zip for distribution
 │   ├── reindex_vectors.py      ← rebuilds the ChromaDB semantic index from memory_entries
 │   ├── serve_api.py
 │   ├── start.ps1
@@ -593,7 +593,7 @@ Create a `CLAUDE.md` in the project root with the full ClaudeOS project rules (a
 ```powershell
 git init
 git add .
-git commit -m "init: CLIENT_NAME OS — FaiykeOS v17.0 base build"
+git commit -m "init: CLIENT_NAME OS — FacykeOS v17.0 base build"
 ```
 
 ---
@@ -643,13 +643,13 @@ Every deployment built by this skill includes all of the following. Nothing is c
 ### Layer 15 (Commercial Package)
 | Feature | Details |
 |---------|---------|
-| Product name | **FaiykeOS** — commercial brand name; internal codebase retains ClaudeOS |
+| Product name | **FacykeOS** — commercial brand name; internal codebase retains ClaudeOS |
 | Landing page | `docs/landing/index.html` — standalone HTML marketing page; hero, features, personas, pricing preview, FAQ |
 | Pricing page | `docs/landing/pricing.html` — 3-tier cards, comparison table, Formspree booking form; replace `YOUR_FORM_ID` with real Formspree endpoint |
 | Pricing tiers | Developer $197 one-time \| Business $997 + $147/mo \| Agency $497 + $97/mo or $997 flat unlimited |
 | Buyer collateral | `docs/PRODUCT_README.md`, `docs/SETUP_GUIDE_NONTECHNICAL.md`, `docs/AGENCY_LICENSE.md` |
-| Distribution ZIP | `scripts/build_package.py` → `dist/FaiykeOS-v17.3.zip`; excludes .env, data/, logs/, dev scripts |
-| Replacements needed | Update `hello@faiyke-ai.com` email + Formspree form ID in landing/pricing HTML before distributing |
+| Distribution ZIP | `scripts/build_package.py` → `dist/FacykeOS-v17.3.zip`; excludes .env, data/, logs/, dev scripts |
+| Replacements needed | Update `info@facyke.com` email + Formspree form ID in landing/pricing HTML before distributing |
 
 ### Authentication & Roles
 | Role | Access |

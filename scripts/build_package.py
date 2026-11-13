@@ -1,6 +1,6 @@
 """
 scripts/build_package.py
-Builds distributable FaiykeOS ZIP package.
+Builds distributable FacykeOS ZIP package.
 
 Excludes:
   - .env (secrets)
@@ -15,7 +15,7 @@ Excludes:
   - assets/ (large binaries not needed by buyers)
   - *.db / *.db-shm / *.db-wal (database files)
 
-Produces: dist/FaiykeOS-v17.3.zip
+Produces: dist/FacykeOS-v17.3.zip
 """
 
 import os
@@ -28,7 +28,7 @@ from pathlib import Path
 VERSION = "17.3"
 ROOT = Path(__file__).resolve().parent.parent
 DIST_DIR = ROOT / "dist"
-OUT_ZIP = DIST_DIR / f"FaiykeOS-v{VERSION}.zip"
+OUT_ZIP = DIST_DIR / f"FacykeOS-v{VERSION}.zip"
 
 # Directories to skip entirely
 SKIP_DIRS = {
@@ -123,7 +123,7 @@ def build_zip():
                 skipped.append(path.relative_to(ROOT))
                 continue
 
-            arcname = Path("FaiykeOS") / path.relative_to(ROOT)
+            arcname = Path("FacykeOS") / path.relative_to(ROOT)
             zf.write(path, arcname)
             included.append(path.relative_to(ROOT))
 
@@ -135,7 +135,7 @@ def build_zip():
     print("\nTop-level contents:")
     top = sorted({str(p).split(os.sep)[0] for p in included})
     for t in top:
-        print(f"  FaiykeOS/{t}/")
+        print(f"  FacykeOS/{t}/")
 
 
 if __name__ == "__main__":
