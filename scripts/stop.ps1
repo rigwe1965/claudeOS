@@ -10,13 +10,13 @@ if (Test-Path $envFile) {
 }
 
 foreach ($port in @($FLASK_PORT, $STREAMLIT_PORT)) {
-    $lines = netstat -ano 2>$null | Select-String ":$port\s"
+    $lines = netstat -ano 2>$null | Select-String ":$port\s" | Select-String "LISTENING"
     foreach ($line in $lines) {
         $parts = $line.ToString().Trim() -split "\s+"
-        $pid = $parts[-1]
-        if ($pid -match "^\d+$" -and $pid -ne "0") {
-            taskkill /F /PID $pid 2>$null | Out-Null
-            Write-Host "Killed PID $pid on :$port" -ForegroundColor Yellow
+        $procId = $parts[-1]
+        if ($procId -match "^\d+$" -and $procId -ne "0") {
+            taskkill /F /PID $procId 2>$null | Out-Null
+            Write-Host "Killed PID $procId on :$port" -ForegroundColor Yellow
         }
     }
 }

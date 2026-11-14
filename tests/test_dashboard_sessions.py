@@ -92,6 +92,7 @@ def test_revocation_invalidates_all_bound_handles_and_restored_refresh(
 def test_restoration_requires_live_matching_refresh_session_and_user(client, dashboard_session, state):
     from core.auth import create_user
     from core.database import get_db
+    from datetime import timedelta
     from core.utils import utcnow
 
     _, _, key, original = dashboard_session
@@ -100,8 +101,9 @@ def test_restoration_requires_live_matching_refresh_session_and_user(client, das
     with get_db() as conn:
         if state == "expired":
             # ISO timestamps with 'T' must be compared chronologically, even today.
+            # One second in the past: "now" itself races the clock on a loaded machine.
             conn.execute("UPDATE user_sessions SET expires_at=? WHERE id=?",
-                         (utcnow().isoformat(), original["id"]))
+                         ((utcnow() - timedelta(seconds=1)).isoformat(), original["id"]))
         elif state == "reset":
             conn.execute("UPDATE user_sessions SET token_purpose='password_reset' WHERE id=?", (original["id"],))
         elif state == "deleted":
