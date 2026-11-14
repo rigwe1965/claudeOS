@@ -29,6 +29,20 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
+      - name: Lint (real bugs only)
+        # Syntax errors and undefined names. Style rules are left off on purpose.
+        run: |
+          python -m pip install ruff
+          python -m ruff check --select E9,F63,F7,F82 --exclude .venv,dist,vault,data,outputs,logs .
+
+      - name: Dependency audit (informational)
+        # Non-blocking for now: known issues sit in transitive packages (Pillow, tornado,
+        # transformers) whose upgrades need testing against the pinned NumPy/ChromaDB stack.
+        continue-on-error: true
+        run: |
+          python -m pip install pip-audit
+          python -m pip_audit --skip-editable
+
       - name: Run tests
         env:
           # Throwaway value for tests only. Locally this comes from .env, which CI doesn't have.
