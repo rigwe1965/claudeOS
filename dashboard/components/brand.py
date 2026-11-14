@@ -1044,8 +1044,23 @@ div[data-baseweb="input"] > div,
     font-family: 'Inter', sans-serif !important;
 }}
 /* Selectbox chevron / icon */
-[data-testid="stSelectbox"] svg, [data-testid="stSelectbox"] svg path {{
+[data-testid="stSelectbox"] svg, [data-testid="stSelectbox"] svg path,
+[data-testid="stMultiSelect"] svg, [data-testid="stMultiSelect"] svg path:not([fill="none"]) {{
     fill: {t['TEXT_MUTED']} !important;
+}}
+/* Streamlit >= 1.67 icons carry an invisible bounding-box path (fill="none") beside the
+   real glyph. Filling every path turned it into a solid square, so keep it unfilled. */
+[data-testid="stSelectbox"] svg path[fill="none"],
+[data-testid="stMultiSelect"] svg path[fill="none"],
+[data-testid="stTextInput"] svg path[fill="none"],
+[data-testid="stNumberInput"] svg path[fill="none"],
+[data-testid="stDateInput"] svg path[fill="none"] {{
+    fill: none !important;
+}}
+/* The select's wrapper (role=group) shows behind the arrow button: match the input colour */
+[data-testid="stSelectbox"] [role="group"],
+[data-testid="stMultiSelect"] [role="group"] {{
+    background-color: {t['INPUT_BG']} !important;
 }}
 /* Selectbox open dropdown list */
 [data-baseweb="menu"], [data-baseweb="menu"] ul,
