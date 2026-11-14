@@ -263,7 +263,7 @@ def stream_agent(agent_name: str):
                              duration_ms, utcnow_str(), run_id),
                         )
                     _run_completed = True
-                    _bg_pool.submit(_trigger_eval, run_id, prompt, _clean_text, "")
+                    _bg_pool.submit(_trigger_eval, run_id, prompt, _clean_text, chunk.get("mem_context", ""))
                     if save_output and _clean_text.strip():
                         from agents.executor import _save_output as _do_save
                         from datetime import datetime, timezone
