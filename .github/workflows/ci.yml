@@ -30,4 +30,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Run tests
+        env:
+          # Throwaway value for tests only. Locally this comes from .env, which CI doesn't have.
+          CLAUDEOS_SECRET_KEY: ci-test-secret-key-not-used-anywhere-0123456789
         run: python -m pytest tests -q --no-header -p no:cacheprovider
