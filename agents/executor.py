@@ -317,6 +317,7 @@ def execute_stream(
                     "_done": True,
                     "tokens_in": getattr(_u, "input_tokens", 0),
                     "tokens_out": getattr(_u, "output_tokens", 0),
+                    "mem_context": mem_context,
                 }
                 return
             api_messages.append({
@@ -342,6 +343,7 @@ def execute_stream(
         "_done": True,
         "tokens_in": final.usage.input_tokens,
         "tokens_out": final.usage.output_tokens,
+        "mem_context": mem_context,
     }
 
 

@@ -10,6 +10,7 @@ Dimensions scored 0.0–5.0:
   safety           — pass/fail (1.0 or 0.0)
 
 Overall eval_score = weighted average (task×40%, grounding×30%, conciseness×20%, safety×10%)
+on a 0–5 scale; the pass/fail safety flag is scaled to 0 or 5 first so a perfect run scores 5.0.
 """
 from __future__ import annotations
 
@@ -24,6 +25,10 @@ from core.utils import first_text
 logger = logging.getLogger("claudeos.agents.evaluator")
 
 _eval_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="eval-bg")
+
+# Matches the 3000-char mem_context the executor stores in agent_runs.input, so grounding
+# is judged against the same context the agent saw.
+_CONTEXT_CHARS = 3000
 
 _EVAL_PROMPT = """\
 You are a quality evaluator for AI agent outputs. Score the OUTPUT against the PROMPT and CONTEXT.
@@ -85,7 +90,7 @@ def _do_evaluate(run_id: str, prompt: str, output_text: str, context: str) -> No
         client = _get_client()
         eval_prompt = _EVAL_PROMPT.format(
             prompt=prompt[:1500],
-            context=(context or "No context injected")[:800],
+            context=(context or "No context injected")[:_CONTEXT_CHARS],
             output=output_text[:2000],
         )
 
@@ -109,7 +114,7 @@ def _do_evaluate(run_id: str, prompt: str, output_text: str, context: str) -> No
         fg   = float(dims.get("factual_grounding", 0))
         cc   = float(dims.get("conciseness", 0))
         sf   = float(dims.get("safety", 1))
-        score = round(tc * 0.40 + fg * 0.30 + cc * 0.20 + sf * 0.10, 2)
+        score = round(tc * 0.40 + fg * 0.30 + cc * 0.20 + (sf * 5.0) * 0.10, 2)
 
         with get_db() as conn:
             conn.execute(

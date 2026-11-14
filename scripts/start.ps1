@@ -13,6 +13,14 @@ Write-Host ""
 # Prefer the project virtualenv when present
 $PY = if (Test-Path (Join-Path $ROOT ".venv\Scripts\python.exe")) { Join-Path $ROOT ".venv\Scripts\python.exe" } else { "python" }
 
+# Verify the interpreter really runs (a venv whose base Python was removed fails silently later)
+$null = & $PY -c "import sys" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  Python at '$PY' does not run. The .venv base Python is missing." -ForegroundColor Red
+    Write-Host "  Fix: install Python 3.11, then: Remove-Item -Recurse -Force .venv; py -3.11 -m venv .venv; .\.venv\Scripts\python.exe -m pip install -r requirements.txt" -ForegroundColor Yellow
+    exit 1
+}
+
 # Load .env to read ports
 $FLASK_PORT = 5000
 $STREAMLIT_PORT = 8501
@@ -74,7 +82,8 @@ Write-Host "Starting Dashboard on :$STREAMLIT_PORT ..." -ForegroundColor Cyan
 Write-Host "(Press Ctrl+C to stop)" -ForegroundColor DarkGray
 Write-Host ""
 
-# Start Streamlit (foreground)
+# Start Streamlit (foreground). Its stderr warnings must not be treated as terminating errors in PS 5.1.
+$ErrorActionPreference = "Continue"
 Set-Location $ROOT
 $env:CLAUDEOS_DEV_API_KEY = if (Test-Path $envFile) { (Get-Content $envFile | Select-String "CLAUDEOS_DEV_API_KEY=(.+)").Matches.Groups[1].Value } else { "" }
 & $PY -m streamlit run dashboard\app.py --server.port $STREAMLIT_PORT --server.headless true
