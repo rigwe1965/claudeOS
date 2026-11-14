@@ -33,4 +33,6 @@ jobs:
         env:
           # Throwaway value for tests only. Locally this comes from .env, which CI doesn't have.
           CLAUDEOS_SECRET_KEY: ci-test-secret-key-not-used-anywhere-0123456789
+          # Fake key: the tests never call the real API.
+          ANTHROPIC_API_KEY: sk-ant-fake-ci-key
         run: python -m pytest tests -q --no-header -p no:cacheprovider
