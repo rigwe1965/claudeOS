@@ -48,5 +48,6 @@ def test_memory_calls_log_no_errors_and_return_nothing(vs_no_embeddings, caplog)
             assert vs.search("some text", "global") in ([], None) or not vs.search("some text", "global")
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert errors == [], [r.getMessage() for r in errors]
-    warnings = [r for r in caplog.records if "semantic search disabled" in r.getMessage()]
+    # Only this module's own logger: the app's warmup thread (claudeos.api) logs a similar line of its own, and caplog sees both.
+    warnings = [r for r in caplog.records if r.name == "claudeos.memory.vector" and "semantic search disabled" in r.getMessage()]
     assert len(warnings) == 1, "warn once, not on every call"
