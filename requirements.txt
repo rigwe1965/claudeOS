@@ -17,6 +17,9 @@ pyarrow>=7.0,<22
 
 # Memory / Vector
 chromadb==0.5.5
+# chromadb 0.5.5 calls posthog.capture(distinct_id, event, props) even with telemetry off; posthog >= 6 changed that signature, so every
+# start logs 'Failed to send telemetry event ... capture() takes 1 positional argument but 3 were given'. 5.x keeps the old one.
+posthog<6
 sentence-transformers==3.1.1
 
 # Phase 11.2: Hybrid BM25+Vector RAG
