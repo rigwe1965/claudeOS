@@ -26,28 +26,41 @@ _ef = None   # embedding function
 _collections: dict = {}
 _init_lock = __import__("threading").Lock()
 _init_failed = False  # M3: set True when ChromaDB init fails — used by health checks
+_embeddings_missing = False  # the embedding package is not installed: permanent for this process, so stop retrying
 
 
 def _init():
-    global _client, _ef
-    if _client is not None:
+    """True only when ChromaDB AND the embedding function are ready.
+
+    The client is kept even when embeddings are unavailable (e.g. sentence-transformers not installed, as in the
+    lean demo image), so health checks still see ChromaDB itself as up; semantic search is simply off, FTS5 is used,
+    and that is logged once instead of an ERROR on every memory read/write.
+    """
+    global _client, _ef, _init_failed, _embeddings_missing
+    if _client is not None and _ef is not None:
         return True
-    with _init_lock:
-        if _client is not None:  # double-checked locking — another thread may have init'd
+    if _embeddings_missing and _client is not None:  # already warned once; nothing to retry until the package is installed
+        return False
+    with _init_lock:  # double-checked locking — another thread may have init'd
+        if _client is not None and _ef is not None:
             return True
+        if _embeddings_missing and _client is not None:
+            return False
         try:
             import chromadb
             from chromadb.utils import embedding_functions
 
-            settings = get_settings()
-            _client = chromadb.PersistentClient(path=str(settings.chromadb_path))
+            if _client is None:
+                settings = get_settings()
+                _client = chromadb.PersistentClient(path=str(settings.chromadb_path))
             _ef = embedding_functions.SentenceTransformerEmbeddingFunction(
                 model_name="all-MiniLM-L6-v2"
             )
+            _init_failed = False
             return True
         except Exception as e:
-            global _init_failed
             _init_failed = True
+            _embeddings_missing = isinstance(e, ImportError) and _client is not None
             logger.warning("ChromaDB unavailable — semantic search disabled: %s", e)
             return False
 
