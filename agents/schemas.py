@@ -100,3 +100,10 @@ class AgentDispatchRequest(BaseModel):
     save_output: bool = True
     triggered_by: str = "user"
     workflow_run_id: Optional[str] = None
+    model: Optional[str] = None  # one-off model choice for this run; empty = the agent's own model
+
+    @field_validator("model", mode="after")
+    @classmethod
+    def model_must_be_supported(cls, v):
+        from core.models import choose_model
+        return choose_model(v, "") or None

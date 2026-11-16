@@ -77,7 +77,7 @@ def dispatch(
                 system_prompt=agent.system_prompt,
                 prompt=request.prompt,
                 namespace=request.namespace,
-                model=agent.model,
+                model=request.model or agent.model,
                 max_tokens=agent.max_tokens,
                 temperature=agent.temperature,
                 context=request.context,

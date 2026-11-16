@@ -197,6 +197,14 @@ def stream_agent(agent_name: str):
     if not prompt:
         return jsonify({"error": "prompt required"}), 400
 
+    # Optional one-off model choice (the dashboard's model picker); must be a supported model.
+    from core.models import choose_model
+    _body = (request.get_json(silent=True) or {}) if request.method == "POST" else {}
+    try:
+        _chosen_model = choose_model(_body.get("model") or request.args.get("model"), "")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
     agent = registry.get_by_name(agent_name)
     if not agent:
         return jsonify({"error": "Agent not found"}), 404
@@ -234,7 +242,7 @@ def stream_agent(agent_name: str):
                 system_prompt=agent.system_prompt,
                 prompt=prompt,
                 namespace=namespace,
-                model=agent.model,
+                model=_chosen_model or agent.model,
                 max_tokens=agent.max_tokens,
                 temperature=agent.temperature,
                 context=context,
@@ -254,7 +262,7 @@ def stream_agent(agent_name: str):
                         r'|\n*\*Synthesising\.\.\.\*\n*',
                         '', text
                     ).strip()
-                    output = {"text": _clean_text, "model": agent.model, "stop_reason": "end_turn"}
+                    output = {"text": _clean_text, "model": _chosen_model or agent.model, "stop_reason": "end_turn"}
                     with get_db() as conn:
                         conn.execute(
                             """UPDATE agent_runs SET output=?, status='done', tokens_in=?,

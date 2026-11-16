@@ -116,6 +116,19 @@ def fast_model() -> str:
     return _checked("CLAUDE_FAST_MODEL", LATEST_FAST_MODEL)
 
 
+def choose_model(requested: str | None, fallback: str) -> str:
+    """The model for one request: the caller's explicit choice if it is supported, else `fallback` (the agent's own model).
+
+    A choice the caller made on purpose that is not supported raises ValueError (the API answers 422/400) instead of being
+    silently swapped, so nobody believes they are talking to a model they are not."""
+    requested = (requested or "").strip()
+    if not requested:
+        return fallback
+    if not is_supported(requested):
+        raise ValueError(f"Unsupported model {requested!r}. Choose one of: {', '.join(SUPPORTED_MODELS)}")
+    return requested
+
+
 def resolve_model(stored: str | None) -> str:
     """Map an agent's stored model to the one that should actually be called.
 
