@@ -36,6 +36,29 @@ PRICING: dict[str, tuple[float, float]] = {
     "claude-fable-5-1":  (10.0, 50.0),
 }
 
+# Models an operator may choose, each priced above and checked against Anthropic's Models API for the features
+# ClaudeOS uses (tools, streaming, images). Anything else is ignored with a warning, so a typo in .env or in an
+# agent file can never send a request to a model that does not exist. (claude-fable-5-2 is left out until its
+# price is confirmed: the cost report needs one.)
+SUPPORTED_MODELS: tuple[str, ...] = (
+    "claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5",
+    "claude-sonnet-5", "claude-opus-5", "claude-opus-4-8", "claude-fable-5-1",
+)
+
+_warned: set[str] = set()
+
+
+def _warn_once(message: str) -> None:
+    if message not in _warned:
+        _warned.add(message)
+        import logging
+        logging.getLogger("claudeos.models").warning(message)
+
+
+def is_supported(model: str | None) -> bool:
+    return (model or "").strip() in SUPPORTED_MODELS
+
+
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 _dotenv_cache: dict = {"mtime": None, "values": {}}
 
@@ -77,12 +100,20 @@ def _env(name: str, default: str) -> str:
     return value or default
 
 
+def _checked(name: str, fallback: str) -> str:
+    value = _env(name, fallback)
+    if value != fallback and not is_supported(value):
+        _warn_once(f"{name}={value!r} is not a supported Claude model; using {fallback}.")
+        return fallback
+    return value
+
+
 def default_model() -> str:
-    return _env("CLAUDE_MODEL", LATEST_MODEL)
+    return _checked("CLAUDE_MODEL", LATEST_MODEL)
 
 
 def fast_model() -> str:
-    return _env("CLAUDE_FAST_MODEL", LATEST_FAST_MODEL)
+    return _checked("CLAUDE_FAST_MODEL", LATEST_FAST_MODEL)
 
 
 def resolve_model(stored: str | None) -> str:
@@ -92,6 +123,9 @@ def resolve_model(stored: str | None) -> str:
     """
     stored = (stored or "").strip()
     if not stored or stored in LEGACY_MODELS:
+        return default_model()
+    if not is_supported(stored):
+        _warn_once(f"An agent asks for {stored!r}, which is not a supported Claude model; using {default_model()}.")
         return default_model()
     return stored
 
@@ -118,7 +152,8 @@ def price_per_mtok(model: str | None = None) -> tuple[float, float]:
             return p_in, p_out
         except ValueError:
             pass
-    return PRICING.get(model) or PRICING.get(LATEST_MODEL, (2.0, 10.0))
+    # A model with no price is costed at the dearest price known, never at a cheaper one.
+    return PRICING.get(model) or (max(p[0] for p in PRICING.values()), max(p[1] for p in PRICING.values()))
 
 
 def estimate_cost(tokens_in: int, tokens_out: int, model: str | None = None) -> float:
@@ -132,4 +167,5 @@ def model_info() -> dict:
     return {
         "default_model": d, "default_label": model_label(d), "default_price": price_per_mtok(d),
         "fast_model": f, "fast_label": model_label(f), "fast_price": price_per_mtok(f),
+        "choices": [{"id": m, "label": model_label(m), "price": price_per_mtok(m)} for m in SUPPORTED_MODELS],
     }
