@@ -339,7 +339,7 @@ def _render_chat_tab(agents: list, api_get, api_post):
             st.session_state.pop(f"conv_id_{_ag}", None)
             st.session_state.pop("_last_audio_hash", None)
 
-        c1, c2, c3 = st.columns([3, 3, 1])
+        c1, c2, c_model, c3 = st.columns([3, 3, 3, 1])
         with c1:
             st.selectbox(
                 "Agent", agent_names, key="chat_agent",
@@ -347,6 +347,14 @@ def _render_chat_tab(agents: list, api_get, api_post):
             )
         with c2:
             st.selectbox("Namespace", _ns_opts, key="chat_ns")
+        with c_model:
+            _model_choices = (api_get("/system/models") or {}).get("choices") or []
+            _by_id = {c["id"]: c for c in _model_choices}
+            st.selectbox(
+                "Model", [""] + list(_by_id), key="chat_model",
+                format_func=lambda m: "Agent default" if not m else f"{_by_id[m]['label']}  (${_by_id[m]['price'][0]:g} / ${_by_id[m]['price'][1]:g} per M tokens)",
+                help="Which Claude model answers this chat. Larger models cost more. 'Agent default' uses the model set for the agent.",
+            )
         with c3:
             st.markdown('<div style="height:1.75rem"></div>', unsafe_allow_html=True)
             st.button("Clear", key="chat_clear", on_click=_do_clear, use_container_width=True)
@@ -432,6 +440,9 @@ def _stream_response(
     }
     if messages:
         params["messages"] = json.dumps(messages)
+    _chat_model = st.session_state.get("chat_model") or ""
+    if _chat_model:
+        params["model"] = _chat_model
 
     url = f"http://127.0.0.1:{_FLASK_PORT}/api/v1/agents/{agent_name}/stream"
 
@@ -443,6 +454,8 @@ def _stream_response(
     # Use POST when images present (GET can't carry body); GET otherwise
     if images:
         body = {"prompt": prompt, "namespace": namespace, "save_output": save_out}
+        if _chat_model:
+            body["model"] = _chat_model
         if messages:
             body["messages"] = messages
         body["images"] = images
@@ -506,6 +519,8 @@ def _blocking_response(
         payload["messages"] = messages
     if images:
         payload["images"] = images
+    if st.session_state.get("chat_model"):
+        payload["model"] = st.session_state["chat_model"]
 
     result = api_post(f"/agents/{agent_name}/run", payload)
     if not result:

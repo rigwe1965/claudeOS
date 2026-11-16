@@ -428,3 +428,62 @@ def test_api_system_events(client, auth_headers):
     r = client.get("/api/v1/system/events", headers=auth_headers)
     assert r.status_code == 200
     assert "events" in r.get_json()
+
+
+# ── One-off model choice (the dashboard's model picker) ───────────────────────
+
+def test_choose_model_rules():
+    from core import models
+    assert models.choose_model("", "claude-sonnet-5-5") == "claude-sonnet-5-5"
+    assert models.choose_model(None, "claude-sonnet-5-5") == "claude-sonnet-5-5"
+    assert models.choose_model("claude-opus-5-5", "claude-sonnet-5-5") == "claude-opus-5-5"
+    with pytest.raises(ValueError):
+        models.choose_model("claude-sonet-5-5", "claude-sonnet-5-5")
+
+
+def test_dispatch_request_validates_the_model():
+    from pydantic import ValidationError
+    from agents.schemas import AgentDispatchRequest
+    assert AgentDispatchRequest(prompt="x").model is None
+    assert AgentDispatchRequest(prompt="x", model="").model is None
+    assert AgentDispatchRequest(prompt="x", model="claude-haiku-5-5").model == "claude-haiku-5-5"
+    with pytest.raises(ValidationError):
+        AgentDispatchRequest(prompt="x", model="not-a-model")
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_stream_uses_the_chosen_model(client, monkeypatch, auth_headers, method):
+    from agents import executor
+    execute = MagicMock(return_value=iter(["hi", {"_done": True, "tokens_in": 1, "tokens_out": 2}]))
+    monkeypatch.setattr(executor, "execute_stream", execute)
+    monkeypatch.setattr(executor._bg_pool, "submit", MagicMock())
+    data = {"prompt": "test", "namespace": "global", "model": "claude-opus-5-5"}
+    kwargs = {"json": data} if method == "POST" else {"query_string": data}
+    r = client.open("/api/v1/agents/briefing-agent/stream", method=method, headers=auth_headers, buffered=True, **kwargs)
+    assert r.status_code == 200
+    assert execute.call_args.kwargs["model"] == "claude-opus-5-5"
+
+
+def test_stream_without_a_choice_uses_the_agents_own_model(client, monkeypatch, auth_headers):
+    from agents import executor, registry
+    execute = MagicMock(return_value=iter(["hi", {"_done": True, "tokens_in": 1, "tokens_out": 2}]))
+    monkeypatch.setattr(executor, "execute_stream", execute)
+    monkeypatch.setattr(executor._bg_pool, "submit", MagicMock())
+    r = client.post("/api/v1/agents/briefing-agent/stream", json={"prompt": "test", "namespace": "global"}, headers=auth_headers, buffered=True)
+    assert r.status_code == 200
+    assert execute.call_args.kwargs["model"] == registry.get_by_name("briefing-agent").model
+
+
+def test_stream_refuses_an_unsupported_model(client, monkeypatch, auth_headers):
+    from agents import executor
+    execute = MagicMock()
+    monkeypatch.setattr(executor, "execute_stream", execute)
+    r = client.post("/api/v1/agents/briefing-agent/stream", json={"prompt": "test", "model": "gpt-4"}, headers=auth_headers)
+    assert r.status_code == 400
+    assert "Unsupported model" in r.get_json()["error"]
+    execute.assert_not_called()
+
+
+def test_run_refuses_an_unsupported_model(client, auth_headers):
+    r = client.post("/api/v1/agents/briefing-agent/run", json={"prompt": "x", "model": "gpt-4"}, headers=auth_headers)
+    assert r.status_code == 422
