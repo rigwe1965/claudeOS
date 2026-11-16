@@ -50,7 +50,7 @@ def render(api_get, api_post, bulk_delete=None):
 
 def _render_workflow_list(api_get, api_post):
     data = api_get("/workflows?enabled=false")
-    if not data:
+    if data is None:  # a failed call; an empty list is a healthy API with no workflows yet (handled just below)
         st.error("API unreachable")
         return
 
