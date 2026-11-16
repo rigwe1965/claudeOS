@@ -105,3 +105,36 @@ def test_no_hardcoded_model_ids_in_runtime_code():
     for rel in ("agents/evaluator.py", "memory/consolidator.py", "agents/executor.py", "agents/dispatcher.py"):
         text = (root / rel).read_text(encoding="utf-8")
         assert not re.search(r'"claude-(sonnet|haiku|opus)-', text), rel
+
+
+def test_every_supported_model_has_a_price():
+    for m in models.SUPPORTED_MODELS:
+        assert m in models.PRICING, m
+
+
+def test_a_mistyped_default_model_is_ignored(monkeypatch):
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-sonet-5-5")
+    assert models.default_model() == models.LATEST_MODEL
+    monkeypatch.setenv("CLAUDE_FAST_MODEL", "nope")
+    assert models.fast_model() == models.LATEST_FAST_MODEL
+
+
+def test_a_supported_choice_is_used(monkeypatch):
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-opus-5-5")
+    assert models.default_model() == "claude-opus-5-5"
+    monkeypatch.setenv("CLAUDE_FAST_MODEL", "claude-sonnet-5-5")
+    assert models.fast_model() == "claude-sonnet-5-5"
+
+
+def test_an_agent_with_an_unknown_model_runs_on_the_default():
+    assert models.resolve_model("claude-nonexistent-9") == models.default_model()
+
+
+def test_an_unpriced_model_is_never_costed_cheaper_than_the_dearest_known():
+    assert models.price_per_mtok("claude-unpriced-1") == (max(p[0] for p in models.PRICING.values()), max(p[1] for p in models.PRICING.values()))
+
+
+def test_model_info_lists_the_choices_for_the_ui():
+    ids = [c["id"] for c in models.model_info()["choices"]]
+    assert ids == list(models.SUPPORTED_MODELS)
+    assert models.model_info()["choices"][0]["label"].startswith("Haiku")
