@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Core
     CLAUDEOS_SECRET_KEY: str  # Required — no default; must be set in .env
     CLAUDEOS_ENV: str = "development"
-    CLAUDEOS_VERSION: str = "1.0.0"
+    CLAUDEOS_VERSION: str = "17.4.0"
 
     # Claude API
     ANTHROPIC_API_KEY: str = ""

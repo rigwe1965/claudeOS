@@ -169,7 +169,7 @@ Create the following directory structure in the current working directory:
 │   ├── seed_client_schema.py   ← pre-populate 14 onboarding fields per namespace
 │   ├── seed_namespaces.py
 │   ├── seed_workflows.py
-│   ├── build_package.py        ← builds dist/FacykeOS-v17.3.zip for distribution
+│   ├── build_package.py        ← builds dist/FacykeOS-v17.4.0.zip for distribution
 │   ├── reindex_vectors.py      ← rebuilds the ChromaDB semantic index from memory_entries
 │   ├── serve_api.py
 │   ├── start.ps1
@@ -303,7 +303,7 @@ Create `.env` with:
 ANTHROPIC_API_KEY=REPLACE_WITH_YOUR_KEY
 CLAUDEOS_SECRET_KEY=SECRET_KEY
 CLAUDEOS_ENV=development
-CLAUDEOS_VERSION=1.0.0
+CLAUDEOS_VERSION=17.4.0
 
 SQLITE_PATH=data/claudeos.db
 CHROMADB_PATH=data/chromadb
@@ -648,7 +648,7 @@ Every deployment built by this skill includes all of the following. Nothing is c
 | Pricing page | `docs/landing/pricing.html` — 3-tier cards, comparison table, Formspree booking form; replace `YOUR_FORM_ID` with real Formspree endpoint |
 | Pricing tiers | Developer $197 one-time \| Business $997 + $147/mo \| Agency $497 + $97/mo or $997 flat unlimited |
 | Buyer collateral | `docs/PRODUCT_README.md`, `docs/SETUP_GUIDE_NONTECHNICAL.md`, `docs/AGENCY_LICENSE.md` |
-| Distribution ZIP | `scripts/build_package.py` → `dist/FacykeOS-v17.3.zip`; excludes .env, data/, logs/, dev scripts |
+| Distribution ZIP | `scripts/build_package.py` → `dist/FacykeOS-v17.4.0.zip`; excludes .env, data/, logs/, dev scripts |
 | Replacements needed | Update `info@facyke.com` email + Formspree form ID in landing/pricing HTML before distributing |
 
 ### Authentication & Roles

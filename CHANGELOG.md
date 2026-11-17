@@ -4,7 +4,7 @@ All notable changes to ClaudeOS / FacykeOS. Follows [Keep a Changelog](https://k
 
 ---
 
-## [Unreleased] — 2026-11-17 — Security policy, PR template, licence clarity
+## [17.4.0] — 2026-11-17 — Security policy, PR template, licence clarity
 
 ### Added
 - `SECURITY.md` (how to report a problem) and a pull request template with a checklist.
@@ -14,7 +14,7 @@ All notable changes to ClaudeOS / FacykeOS. Follows [Keep a Changelog](https://k
 
 ---
 
-## [Unreleased] — 2026-11-13 — Product renamed FaiykeOS → FacykeOS
+## [17.4.0] — 2026-11-13 — Product renamed FaiykeOS → FacykeOS
 
 ### Changed
 - Commercial name `FaiykeOS` → `FacykeOS` in docs, landing pages, licence, and `scripts/build_package.py` (zip is now `dist/FacykeOS-v{VERSION}.zip`). Contact address is now `info@facyke.com`. Older entries below keep the old name as history.
