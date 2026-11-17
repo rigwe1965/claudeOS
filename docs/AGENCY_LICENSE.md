@@ -5,6 +5,9 @@
 **Version:** 17.0  
 **Effective:** Upon purchase of the Agency License
 
+> **Important notice (2026-11-17, draft pending legal review).** The source code in the public ClaudeOS repository is licensed under the MIT licence (see `LICENSE`), and that licence governs the code. Clauses below that restrict copying, publishing or reselling the source code therefore do **not** apply to code published under MIT. This agreement now describes only the paid extras: the white-label brand rights, the build playbook, per-client support, and updates and support commitments. It will be rewritten as a services agreement.
+
+
 ---
 
 ## 1. What This License Grants You

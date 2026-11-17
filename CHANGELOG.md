@@ -4,6 +4,16 @@ All notable changes to ClaudeOS / FacykeOS. Follows [Keep a Changelog](https://k
 
 ---
 
+## [Unreleased] — 2026-11-17 — Security policy, PR template, licence clarity
+
+### Added
+- `SECURITY.md` (how to report a problem) and a pull request template with a checklist.
+
+### Changed
+- `docs/AGENCY_LICENSE.md` now opens with a notice that the repository code is MIT and that the paid agreement covers branding rights, the build playbook, and support only. Draft pending legal review.
+
+---
+
 ## [Unreleased] — 2026-11-13 — Product renamed FaiykeOS → FacykeOS
 
 ### Changed
