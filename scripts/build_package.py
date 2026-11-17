@@ -15,7 +15,7 @@ Excludes:
   - assets/ (large binaries not needed by buyers)
   - *.db / *.db-shm / *.db-wal (database files)
 
-Produces: dist/FacykeOS-v17.3.zip
+Produces: dist/FacykeOS-v17.4.0.zip
 """
 
 import os
@@ -25,7 +25,7 @@ from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-VERSION = "17.3"
+VERSION = "17.4.0"
 ROOT = Path(__file__).resolve().parent.parent
 DIST_DIR = ROOT / "dist"
 OUT_ZIP = DIST_DIR / f"FacykeOS-v{VERSION}.zip"

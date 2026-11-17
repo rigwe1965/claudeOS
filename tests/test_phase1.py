@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 def test_config_loads():
     from core.config import get_settings
     s = get_settings()
-    assert s.CLAUDEOS_VERSION == "1.0.0"
+    assert s.CLAUDEOS_VERSION == "17.4.0"
     assert s.FLASK_PORT == 5000
 
 
@@ -31,7 +31,7 @@ def test_flask_health(tmp_path):
     assert r.status_code == 200
     data = r.get_json()
     assert data["status"] == "ok"
-    assert data["version"] == "1.0.0"
+    assert data["version"] == "17.4.0"
 
 
 def test_flask_system_status(client, auth_headers):

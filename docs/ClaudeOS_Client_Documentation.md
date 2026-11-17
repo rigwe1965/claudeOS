@@ -1,6 +1,6 @@
 # ClaudeOS — Client Documentation
 
-**Version:** 17.3  
+**Version:** 17.4.0  
 **Last Updated:** 2026-06-22  
 **Brand:** #407E3C Green · White · #5a9e56 Accent
 
