@@ -1,7 +1,7 @@
 ---
 name: claudeos-qa-review
 description: Use this skill whenever the user asks to review, audit, check or QA code for bugs, security vulnerabilities, hardcoded secrets or quality problems, even if they only name one file or just say to look for problems. Produces a severity-ranked findings table (CRITICAL to INFO) with file, line and the exact fix for each, then a PASS or FAIL verdict. Read-only: it never edits files.
-allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(git log:*), Bash(git show:*)
+allowed-tools: Read, Grep, Glob, Bash(git diff *), Bash(git log *), Bash(git show *)
 license: MIT
 ---
 

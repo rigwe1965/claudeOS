@@ -10,7 +10,13 @@ Three small skills taken from the agents and workflows of ClaudeOS (FacykeOS), r
 
 ## Install
 
-Claude Code, for all your projects:
+Claude Code, from the plugin marketplace in this repository (one step, and it can be updated):
+
+```
+/plugin install claudeos-skills --marketplace rigwe1965/claudeOS
+```
+
+The skills then appear as `claudeos-skills:claudeos-qa-review` and so on. Or copy the folders yourself, for all your projects:
 
 ```
 mkdir -p ~/.claude/skills

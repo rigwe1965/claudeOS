@@ -1,0 +1,23 @@
+{
+  "name": "claudeos",
+  "description": "Free, MIT-licensed skills from ClaudeOS: a read-only code review, deep web research with labelled evidence, and a research digest.",
+  "owner": {
+    "name": "Facyke"
+  },
+  "plugins": [
+    {
+      "name": "claudeos-skills",
+      "source": "./skills",
+      "description": "Three standalone skills: claudeos-qa-review (read-only code review), claudeos-deep-research (web research with CONFIRMED / INFERRED / UNVERIFIED labels) and claudeos-research-digest (research, then a one-page summary). They need nothing else from ClaudeOS.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "category": "development",
+      "tags": ["code-review", "research", "skills"],
+      "skills": [
+        "./claudeos-qa-review",
+        "./claudeos-deep-research",
+        "./claudeos-research-digest"
+      ]
+    }
+  ]
+}
