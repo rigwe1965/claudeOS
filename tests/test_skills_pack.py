@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 SKILLS = Path(__file__).resolve().parent.parent / "skills"
 NAMES = ["claudeos-qa-review", "claudeos-deep-research", "claudeos-research-digest"]
@@ -21,7 +22,9 @@ def _read(name):
 def _frontmatter(text):
     m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
     assert m, "missing --- frontmatter ---"
-    return dict(line.split(":", 1) for line in m.group(1).splitlines() if ":" in line and not line.startswith(" "))
+    fm = yaml.safe_load(m.group(1))  # a real YAML parse, as other tools do: a hand-rolled split missed an unquoted ": " (2026-11-23)
+    assert isinstance(fm, dict), "the front matter must be name: value lines"
+    return {str(k): (v.strip() if isinstance(v, str) else v) for k, v in fm.items()}
 
 
 def test_exactly_the_documented_skills_exist():
@@ -31,7 +34,7 @@ def test_exactly_the_documented_skills_exist():
 
 @pytest.mark.parametrize("name", NAMES)
 def test_frontmatter(name):
-    fm = {k.strip(): v.strip() for k, v in _frontmatter(_read(name)).items()}
+    fm = _frontmatter(_read(name))
     assert fm["name"] == name, "the name must equal the folder name"
     assert 40 < len(fm["description"]) <= 1024
     # An agent only picks a skill without being told when its description says plainly when to use it. Measured: the passive
