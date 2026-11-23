@@ -23,6 +23,7 @@ Start: `.\scripts\start.ps1` (Flask + Streamlit, uses `.venv`), `.\scripts\start
 - `workflows/pipeline.py`, `workflows/scheduler.py` — step executor; cron + consolidation + sync + backup jobs
 - `core/api/routes/agents.py` — agents REST, SSE stream, output save on stream
 - `dashboard/app.py` auth gate + role nav · `components/brand.py` CSS/theme · `components/proxy.py` hidden proxy buttons · `_pages/_agents.py` chat/catalog/runs
+- `core/skill_scan.py` + `core/api/routes/skills.py` + `dashboard/_pages/_skills.py` — Skills page: inventory, fingerprint (CRLF-insensitive), Agent Skills format check, static risk scan, admin approvals (`skill_approvals`). Read-only, never runs a skill; the API never takes a path from the client (`locate()` matches an id against folders it discovers itself); skill text is shown with `st.text`/`st.code`/`st.dataframe` only, never Markdown/HTML
 - `core/notifications.py` — smtplib, fire-and-forget; `core/backup.py` — daily VACUUM INTO, 7 kept
 - `scripts/`: `build_package.py` (→ gitignored `dist/FacykeOS-v17.4.0.zip`), `reindex_vectors.py`, `seed_client_schema.py`, `create_admin.py`
 
@@ -54,6 +55,7 @@ Start: `.\scripts\start.ps1` (Flask + Streamlit, uses `.venv`), `.\scripts\start
 - Agents: `agent_runs` (+eval_*, `deleted_at`), `agent_conversations`, `agent_conversation_turns`.
 - Memory: `memory_entries` (+context_prefix, is_consolidated, archived, consolidated_from), `memory_fts`, `memory_vectors`.
 - Workflows: `workflows` (+webhook_secret, webhook_enabled), `workflow_runs`.
+- Skills: `skill_approvals` (skill_id, fingerprint, verdict, note, approved_by/at) — migration 028.
 - Migrations in `memory/db/migrations/`; run `python scripts/migrate.py`.
 
 ## Models, eval & memory
@@ -77,7 +79,7 @@ Start: `.\scripts\start.ps1` (Flask + Streamlit, uses `.venv`), `.\scripts\start
 ## Dashboard
 - Order matters: `inject()` and `theme_toggle()` BEFORE the auth gate (they render on the login page); sidebar AFTER it. `inject()` runs every render. Login uses `st.form`.
 - Token: decode locally, refresh via `/auth/refresh` if expiry <5 min; a 401 clears session_state + `st.rerun()`.
-- Nav by role: client/viewer hide Settings, Workflows, Observability, Admin and gain Usage; staff sees Tickets only; Observability is admin/operator only. Onboarding tour only for client/viewer.
+- Nav by role: client/viewer hide Settings, Workflows, Observability, Skills, Admin and gain Usage; staff sees Tickets only; Observability and Skills are admin/operator only (Skills approvals: admin only). Onboarding tour only for client/viewer.
 - Namespace white-labeling: brand color/accent/company_name/icon live in namespace metadata; `get_ns_brand()` (session_state, loaded on login for client/viewer) feeds sidebar logo, `aurora_hero()` and `_ns_brand_css()`. Colors must be strict hex (see audit M-16).
 - `GET /system/namespace-stats?namespace=<ns>` backs the Usage page; Pulse Score = quality×40% + ticket_resolve×30% + memory_fresh×20% + workflow_ok×10%.
 - Admin: Users action bar = Unlock (only if locked) | Deactivate/Reactivate | Reset Password | Edit | Delete (`@st.dialog` modals). Escape user-supplied text with `html.escape` before `unsafe_allow_html`.
