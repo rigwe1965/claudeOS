@@ -282,6 +282,7 @@ pages = {
     "Outputs":        "",
     "Tickets":        "",
     "Observability":  "",
+    "Skills":         "",
     "Settings":       "",
 }
 
@@ -292,6 +293,7 @@ if role in ("client", "viewer"):
     pages.pop("Settings", None)
     pages.pop("Workflows", None)
     pages.pop("Observability", None)
+    pages.pop("Skills", None)
     pages["Usage"] = ""  # client-facing usage + pulse dashboard
 
 if role == "staff":
@@ -301,6 +303,7 @@ if role == "staff":
     pages.pop("Settings", None)
     pages.pop("Admin", None)
     pages.pop("Observability", None)
+    pages.pop("Skills", None)
 
 # Ticket badge — fetch before radio so count shows in nav label (cached 30s)
 _ticket_stats = _cached_api_get(
@@ -347,7 +350,7 @@ for _p in _page_list:
 _NAV_GROUPS = [
     ("CORE",       ["Overview", "Agents", "Memory"]),
     ("OPERATIONS", ["Workflows", "Projects", "Outputs", "Tickets", "Usage"]),
-    ("SYSTEM",     ["Observability", "Settings", "Admin"]),
+    ("SYSTEM",     ["Observability", "Skills", "Settings", "Admin"]),
 ]
 _visible_groups = [
     (g, [p for p in ps if p in _page_list])
@@ -376,6 +379,7 @@ _NAV_ICONS = {
     "Tickets":       '<path d="M3 9a2 2 0 0 0 0 6v3h18v-3a2 2 0 0 1 0-6V6H3z"/><path d="M13 6v12"/>',
     "Usage":         '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>',
     "Observability": '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    "Skills":        '<path d="M12 3l2.4 5.4L20 9.2l-4.2 3.9L17 19l-5-2.9L7 19l1.2-5.9L4 9.2l5.6-.8z"/>',
     "Settings":      '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
     "Admin":         '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
 }
@@ -516,6 +520,7 @@ _PAGE_MODULES = {
     "Outputs":       "dashboard._pages._outputs",
     "Tickets":       "dashboard._pages._tickets",
     "Observability": "dashboard._pages._observability",
+    "Skills":        "dashboard._pages._skills",
     "Settings":      "dashboard._pages._settings",
     "Admin":         "dashboard._pages._admin",
     "Usage":         "dashboard._pages._usage",
@@ -530,6 +535,7 @@ _PAGE_GETTERS = {
     "Outputs":       api_get_cached,
     "Tickets":       api_get,
     "Observability": api_get_cached,
+    "Skills":        api_get,
     "Settings":      api_get,
     "Admin":         api_get_cached,
     "Usage":         api_get_cached,

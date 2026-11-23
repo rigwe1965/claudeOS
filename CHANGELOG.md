@@ -7,6 +7,7 @@ All notable changes to ClaudeOS / FacykeOS. Follows [Keep a Changelog](https://k
 ## [Unreleased]
 
 ### Added
+- **Skills page** in the dashboard (admin/operator): lists the skills installed on the machine (`~/.claude/skills`, bundled, Claude Code plugin cache, plus `SKILL_ROOTS`), with a content fingerprint, an Agent Skills format check and a static scan for warning signs. An admin can approve exactly the content they read; later edits show as "changed since approved". New `GET /api/v1/skills`, `GET /api/v1/skills/{id}`, `POST/DELETE /api/v1/skills/{id}/approve`, migration `028_skill_approvals.sql`, setting `SKILL_ROOTS`. Read-only: nothing runs a skill. Tests: `test_skill_scan.py`, `test_skills_api.py`, `test_skills_page.py`.
 - Claude Code plugin marketplace: `.claude-plugin/marketplace.json` publishes the three standalone skills as the plugin `claudeos-skills` (`/plugin install claudeos-skills --marketplace rigwe1965/claudeOS`). The plugin source is the `skills/` folder only, so nothing else from the repository is installed. `tests/test_plugin_marketplace.py` guards the file.
 
 ### Fixed

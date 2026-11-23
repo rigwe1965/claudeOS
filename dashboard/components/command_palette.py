@@ -22,6 +22,7 @@ PAGE_HINTS = {
     "Tickets":       "Support tickets and SLAs",
     "Usage":         "Your namespace usage and pulse score",
     "Observability": "Quality, latency, tokens, memory health",
+    "Skills":        "Installed skills: scan, fingerprint, approve",
     "Settings":      "Sync, integrations, configuration",
     "Admin":         "Users, API keys, audit log, branding",
 }

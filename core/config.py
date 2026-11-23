@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # NewsAPI: 100 free/day — https://newsapi.org (structured news with full dates)
     NEWSAPI_KEY: str = ""
 
+    # Skills page: extra folders (one skill per sub-folder) to list besides ~/.claude/skills, the bundled skills and the plugin cache.
+    # Separate several with ";" on Windows or ":" elsewhere (os.pathsep).
+    SKILL_ROOTS: str = ""
+
     # Database
     SQLITE_PATH: str = "data/claudeos.db"
     CHROMADB_PATH: str = "data/chromadb"

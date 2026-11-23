@@ -228,6 +228,10 @@ Note: first voice transcription downloads ~140 MB Whisper model automatically.
 
 Three of ClaudeOS's agents and workflows are packaged as standalone skills that run inside Claude Code and other agents that read `SKILL.md`, with no server or account needed: a read-only code review, deep web research with labelled evidence, and a research digest. See [`skills/`](skills/README.md) for what each one does, the tools it asks for and how to install it.
 
+### Skills page (admin/operator)
+
+The dashboard's **Skills** page lists every skill installed on the machine the API runs on: your `~/.claude/skills` folder, the skills bundled with ClaudeOS, the Claude Code plugin cache, and any folders in `SKILL_ROOTS`. For each skill it shows where it came from, a content fingerprint (SHA-256 over all its files, the same on Windows and Linux), whether it follows the [Agent Skills format](https://agentskills.io/specification), and a scan for common warning signs (download-and-run commands, hidden characters, wording aimed at the model, reaching for credential files, bundled programs, unrestricted shell access). An admin can **approve exactly what they read**; if the files change afterwards the skill shows as *changed since approved*. The scan uses simple text patterns: a clean result is not proof of safety, and nothing on the page runs a skill. Operators can read the page but not approve.
+
 ## API Reference
 
 | Method | Endpoint | Description |
@@ -251,6 +255,9 @@ Three of ClaudeOS's agents and workflows are packaged as standalone skills that 
 | `GET` | `/api/v1/tickets/stats` | Ticket counts by status/priority |
 | `GET` | `/api/v1/sync/status` | Sync status |
 | `POST` | `/api/v1/sync/push` | Push to Supabase |
+| `GET` | `/api/v1/skills` | Installed skills with fingerprint, format check, scan and approval status (admin/operator) |
+| `GET` | `/api/v1/skills/{id}` | One skill: files, hashes and its SKILL.md text (admin/operator) |
+| `POST/DELETE` | `/api/v1/skills/{id}/approve` | Approve the exact content you reviewed / take the approval back (admin) |
 
 ## Performance
 

@@ -64,8 +64,10 @@ def create_app() -> Flask:
     # Auth + Admin blueprints
     from core.api.routes.auth_routes import auth_bp
     from core.api.routes.admin_routes import admin_bp
+    from core.api.routes.skills import skills_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(skills_bp)
 
     # Routes — Phase 2+ (registered lazily when modules exist)
     _register_optional_blueprints(app)
