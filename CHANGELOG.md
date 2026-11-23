@@ -4,6 +4,16 @@ All notable changes to ClaudeOS / FacykeOS. Follows [Keep a Changelog](https://k
 
 ---
 
+## [Unreleased]
+
+### Added
+- Claude Code plugin marketplace: `.claude-plugin/marketplace.json` publishes the three standalone skills as the plugin `claudeos-skills` (`/plugin install claudeos-skills --marketplace rigwe1965/claudeOS`). The plugin source is the `skills/` folder only, so nothing else from the repository is installed. `tests/test_plugin_marketplace.py` guards the file.
+
+### Fixed
+- `claudeos-qa-review` did not load when installed as a plugin: its `allowed-tools` used the old `Bash(git diff:*)` pattern form, which makes Claude Code skip the skill. It now uses `Bash(git diff *)`. The permissions are the same three read-only git commands.
+
+---
+
 ## [17.4.0] — 2026-11-17 — Security policy, PR template, licence clarity
 
 ### Added
