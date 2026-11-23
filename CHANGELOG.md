@@ -12,6 +12,7 @@ All notable changes to ClaudeOS / FacykeOS. Follows [Keep a Changelog](https://k
 
 ### Fixed
 - `claudeos-qa-review` did not load when installed as a plugin: its `allowed-tools` used the old `Bash(git diff:*)` pattern form, which makes Claude Code skip the skill. It now uses `Bash(git diff *)`. The permissions are the same three read-only git commands.
+- `claudeos-qa-review`'s front matter was not valid YAML: its `description` contained an unquoted `: ` ("Read-only: it never edits files"). Claude Code accepts that; stricter YAML parsers in other tools do not, and would skip the skill. The description is now in quotes (the text is unchanged). `tests/test_skills_spec.py` and `tests/test_skills_pack.py` now use a real YAML parse, so this cannot pass unnoticed again.
 
 ---
 
