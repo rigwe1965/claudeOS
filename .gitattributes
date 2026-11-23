@@ -1,0 +1,4 @@
+# Claude Code reads these files straight from a git clone on the user's machine. On Windows, Git's default (core.autocrlf=true)
+# would turn them into CRLF, and Claude Code then silently skips claudeos-qa-review (found 2026-11-23). Always check them out as LF.
+skills/**          text eol=lf
+.claude-plugin/**  text eol=lf

@@ -56,3 +56,10 @@ def test_tool_patterns_use_the_form_the_plugin_loader_accepts():
     for skill in (ROOT / "skills").glob("*/SKILL.md"):
         head = skill.read_text(encoding="utf-8").split("\n---", 1)[0]
         assert ":*)" not in head, f"{skill.parent.name}: use 'Bash(cmd *)' not 'Bash(cmd:*)' in allowed-tools"
+
+
+def test_plugin_files_are_checked_out_as_lf():
+    # On Windows (core.autocrlf=true) a CRLF checkout makes Claude Code skip claudeos-qa-review. .gitattributes must force LF.
+    rules = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert re.search(r"^skills/\*\*\s+text\s+eol=lf\s*$", rules, re.M), "skills/** must be forced to LF"
+    assert re.search(r"^\.claude-plugin/\*\*\s+text\s+eol=lf\s*$", rules, re.M), ".claude-plugin/** must be forced to LF"
