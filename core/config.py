@@ -50,15 +50,13 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_SERVICE_KEY: str = ""
     SUPABASE_ACCESS_TOKEN: str = ""  # Personal access token for Management API
+    SYNC_INTERVAL_MIN: int = 15  # auto-sync every N minutes (was read with getattr but never declared, so .env could not change it)
 
     # Scheduler
     SCHEDULER_TIMEZONE: str = "Europe/Berlin"  # Set in .env to override (e.g. UTC, Africa/Lagos, America/New_York)
 
     # Memory bridge
     CLAUDE_MEMORY_PATH: str = ""  # Set in .env to enable /memory/import
-
-    # RECI Transport
-    RECI_DASHBOARD_DB: str = ""
 
     # Email notifications
     SMTP_HOST: str = ""
